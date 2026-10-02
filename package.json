@@ -5,11 +5,13 @@
   "description": "Cliente Git de escritorio con varias cuentas de GitHub",
   "main": "./out/main/index.js",
   "scripts": {
+    "predev": "node scripts/patch-dev-electron.js",
     "dev": "electron-vite dev --watch",
     "build": "electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
-    "dist": "npm run build && electron-builder --mac"
+    "dist": "npm run build && electron-builder --mac",
+    "icon": "sh scripts/make-icon.sh"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -29,10 +31,15 @@
   "build": {
     "appId": "com.gitdog.app",
     "productName": "GitDog",
-    "files": ["out/**"],
+    "files": [
+      "out/**"
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
-      "target": ["dmg"]
+      "target": [
+        "dmg"
+      ],
+      "icon": "resources/icon.icns"
     }
   }
 }

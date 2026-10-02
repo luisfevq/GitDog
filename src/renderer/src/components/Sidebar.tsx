@@ -1,5 +1,7 @@
 import type { Account, Project } from '@shared/types'
-import { CloneIcon, CloseIcon, FolderIcon, PlusIcon } from './Icons'
+import { CloneIcon, CloseIcon, FolderIcon, MailIcon, PlusIcon } from './Icons'
+
+const CONTACT = 'mailto:luisfevq+gitdog@gmail.com?subject=GitDog'
 
 interface Props {
   account: Account | null
@@ -45,6 +47,18 @@ export function Sidebar({ account, projects, selectedId, onSelect, onAddLocal, o
           </button>
         </div>
       )}
+
+      <button
+        className="credit"
+        title="Escribir a Luis Felipe (luisfevq+gitdog@gmail.com)"
+        onClick={() => void window.api.openExternal(CONTACT)}
+      >
+        <span>
+          GitDog · por <b>Luis Felipe</b>
+          <small>Desarrollador</small>
+        </span>
+        <MailIcon size={15} />
+      </button>
     </aside>
   )
 }

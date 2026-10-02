@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, nativeImage, shell } from 'electron'
 import { join } from 'path'
 import { initGit } from './git'
 import { registerIpc } from './ipc'
@@ -42,7 +42,17 @@ function createWindow(): void {
   else void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
 }
 
+app.setAboutPanelOptions({
+  applicationName: 'GitDog',
+  applicationVersion: app.getVersion(),
+  credits: 'Desarrollado por Luis Felipe\nluisfevq+gitdog@gmail.com'
+})
+
 app.whenReady().then(() => {
+  // A packaged app already has its icon. In development, set the Dock icon by hand.
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    app.dock?.setIcon(nativeImage.createFromPath(join(__dirname, '../../resources/icon.png')))
+  }
   const userData = initStore()
   initGit(userData)
   registerIpc(() => mainWindow)

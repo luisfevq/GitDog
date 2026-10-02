@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { basename, join } from 'path'
 import { githubRepoRef } from '../shared/github-url'
-import type { Account, Api, PrDraft, Project, Snapshot } from '../shared/types'
+import type { Account, Api, MergeMethod, PrDraft, Project, ReviewEvent, Snapshot } from '../shared/types'
 import { API_METHODS } from '../shared/types'
 import * as git from './git'
 import type { Auth } from './git'
@@ -83,11 +83,35 @@ function checkTagName(name: string): void {
   }
 }
 
+function checkPullNumber(n: number): number {
+  if (!Number.isInteger(n) || n < 1) throw new Error('Número de pull request no válido.')
+  return n
+}
+
 /** "feature/add-login_page" -> "Add login page" */
 function titleFromBranch(branch: string): string {
   const last = branch.split('/').pop() ?? branch
   const text = last.replace(/[-_]+/g, ' ').trim()
   return text.charAt(0).toUpperCase() + text.slice(1)
+}
+
+/**
+ * Runs a branch change. With leaveChanges, local changes are stashed on the current branch first,
+ * and put back if the change fails. Without it, git carries the changes along.
+ */
+async function withChangesHandled(cwd: string, leaveChanges: boolean, change: () => Promise<void>): Promise<void> {
+  const current = await git.status(cwd)
+  if (!leaveChanges || current.files.length === 0 || !current.branch) {
+    await change()
+    return
+  }
+  await git.stashSave(cwd, current.branch)
+  try {
+    await change()
+  } catch (e) {
+    await git.stashPop(cwd).catch(() => undefined)
+    throw e
+  }
 }
 
 function requireActive(): string {
@@ -235,7 +259,25 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     },
 
     branches: (id) => git.branches(context(id).project.path),
-    checkout: (id, branch, create) => git.checkout(context(id).project.path, branch, create),
+    async switchBranch(id, branch, leaveChanges) {
+      const { project } = context(id)
+      await withChangesHandled(project.path, leaveChanges, () => git.checkout(project.path, branch, false))
+    },
+
+    async createBranch(id, name, base, leaveChanges) {
+      const { project } = context(id)
+      const clean = name.trim()
+      if (!(await git.isValidBranchName(project.path, clean))) {
+        throw new Error('Nombre de rama no válido. No uses espacios ni caracteres especiales.')
+      }
+      await withChangesHandled(project.path, leaveChanges, () => git.createBranchFrom(project.path, clean, base))
+    },
+
+    async restoreChanges(id, ref) {
+      const { project } = context(id)
+      if (!/^stash@\{\d+\}$/.test(ref)) throw new Error('Referencia no válida.')
+      await git.stashPop(project.path, ref)
+    },
     log: (id) => git.log(context(id).project.path),
 
     tags(id) {
@@ -324,8 +366,54 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       })
     },
 
+    async pullFiles(id, number) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      return github.fetchPullFiles(auth.token, owner, repo, checkPullNumber(number))
+    },
+
+    async pullConversation(id, number) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      return github.fetchPullConversation(auth.token, owner, repo, checkPullNumber(number))
+    },
+
+    async reviewPull(id, number, event, body) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      const events: ReviewEvent[] = ['APPROVE', 'COMMENT', 'REQUEST_CHANGES']
+      if (!events.includes(event)) throw new Error('Tipo de revisión no válido.')
+      if (event !== 'APPROVE' && !body.trim()) throw new Error('Escribe un comentario para esta revisión.')
+      await github.submitReview(auth.token, owner, repo, checkPullNumber(number), event, body.trim())
+    },
+
+    async mergePull(id, number, method, deleteBranch) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      const methods: MergeMethod[] = ['merge', 'squash', 'rebase']
+      if (!methods.includes(method)) throw new Error('Método de merge no válido.')
+      const n = checkPullNumber(number)
+
+      const pr = await github.fetchPull(auth.token, owner, repo, n)
+      if (pr.state !== 'open') throw new Error('Este pull request ya no está abierto.')
+      if (pr.draft) throw new Error('Es un borrador. Márcalo como listo en GitHub antes de fusionar.')
+
+      await github.mergePull(auth.token, owner, repo, n, method)
+
+      let note = ''
+      if (deleteBranch && pr.sameRepo && pr.head !== pr.base) {
+        try {
+          await github.deleteBranch(auth.token, owner, repo, pr.head)
+        } catch (e) {
+          note = ` No se pudo borrar la rama: ${(e as Error).message}`
+        }
+      }
+      return `Pull request #${n} fusionado.${note}`
+    },
+
     async openExternal(url) {
-      if (!/^https:\/\/github\.com\//.test(url)) throw new Error('URL no permitida.')
+      const allowed = /^https:\/\/github\.com\//.test(url) || url.startsWith('mailto:luisfevq+gitdog@gmail.com')
+      if (!allowed) throw new Error('URL no permitida.')
       await shell.openExternal(url)
     },
 
