@@ -120,7 +120,23 @@ npm run dist
 
 Crea dos archivos en `dist/`: `GitDog-<versión>-arm64.dmg` (Apple Silicon) y `GitDog-<versión>-x64.dmg` (Intel). La app se firma "ad hoc", sin certificado, así que cualquier persona puede generar el instalador sin cuenta de Apple Developer. Por eso macOS muestra el aviso descrito arriba.
 
-Para quitar el aviso hace falta una cuenta de Apple Developer (99 USD al año) con firma **Developer ID** y notarización.
+#### Instalador firmado y notarizado (quita el aviso de macOS)
+
+Solo para quien tenga una cuenta de Apple Developer (99 USD al año). Con firma **Developer ID** y notarización, macOS abre GitDog sin avisos, y el Keychain no vuelve a pedir permiso tras cada actualización.
+
+Necesitas:
+
+1. Un certificado **Developer ID Application** en tu Keychain. Se crea en Xcode: **Settings** → **Accounts** → tu cuenta → **Manage Certificates** → **+** → **Developer ID Application**. Un certificado "Apple Development" no sirve para repartir la app.
+2. Tu **Apple ID** (correo) y tu **Team ID** (developer.apple.com → **Membership details**).
+3. Una **contraseña específica de app**: appleid.apple.com → **Sign-In and Security** → **App-Specific Passwords**.
+
+Luego:
+
+```bash
+npm run dist:signed
+```
+
+El script pide lo que falte. La contraseña se escribe oculta y no se guarda en ningún archivo. Tarda unos minutos porque Apple revisa la app. La firma muestra el nombre del titular de la cuenta de Apple.
 
 ### Publicar una versión
 
