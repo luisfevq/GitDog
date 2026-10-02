@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Account, CommitInfo, FileChange, Project, PullRequest, RepoStatus, Snapshot } from '@shared/types'
 import { BranchMenu } from './BranchMenu'
+import { NewBranchModal, SwitchBranchModal } from './BranchModals'
 import { DiffView } from './DiffView'
 import { ArrowDownIcon, ArrowUpIcon, PullRequestIcon, RefreshIcon, UploadIcon } from './Icons'
 import { CreatePrModal } from './CreatePrModal'
@@ -41,6 +42,8 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
   const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
   const [prPrompt, setPrPrompt] = useState(false)
   const [creatingPr, setCreatingPr] = useState(false)
+  const [switchTarget, setSwitchTarget] = useState<string | null>(null)
+  const [creatingBranch, setCreatingBranch] = useState(false)
   const [openPrs, setOpenPrs] = useState<number | null>(null)
 
   const refresh = useCallback(async (): Promise<void> => {
@@ -192,10 +195,28 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
       return out || 'Pull completado'
     })
 
-  const checkout = (branch: string, create: boolean): Promise<void> =>
+  const dirty = files.length > 0
+
+  const switchTo = (branch: string, leaveChanges: boolean): Promise<void> =>
     run('checkout', async () => {
-      await window.api.checkout(id, branch, create)
+      await window.api.switchBranch(id, branch, leaveChanges)
+      if (leaveChanges) return 'Cambios guardados en la rama anterior'
     })
+
+  const createBranch = (name: string, base: string | null, leaveChanges: boolean): Promise<void> =>
+    run('checkout', async () => {
+      await window.api.createBranch(id, name, base, leaveChanges)
+      return `Rama ${name} creada`
+    })
+
+  const restore = (ref: string): Promise<void> =>
+    run('restore', async () => {
+      await window.api.restoreChanges(id, ref)
+      return 'Cambios restaurados'
+    })
+
+  // Main branch for "new branch from main". Falls back to a local main or master.
+  const baseBranch = defaultBranch || (branches.includes('main') ? 'main' : branches.includes('master') ? 'master' : null)
 
   if (!status) {
     return <div className="center-note">{loadError ?? 'Leyendo repositorio…'}</div>
@@ -204,7 +225,12 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
   return (
     <div className="repo">
       <div className="toolbar">
-        <BranchMenu current={status.branch} branches={branches} onCheckout={checkout} />
+        <BranchMenu
+          current={status.branch}
+          branches={branches}
+          onSwitch={(b) => (dirty ? setSwitchTarget(b) : void switchTo(b, false))}
+          onCreate={() => setCreatingBranch(true)}
+        />
         <div className="grow" />
         {!status.hasRemote && status.hasCommits && (
           <button className="tool-btn accent" onClick={() => setPublishing(true)}>
@@ -228,6 +254,17 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
       </div>
 
       {loadError && <div className="banner">{loadError}</div>}
+
+      {status.savedChanges && (
+        <div className="banner-ok">
+          <span>
+            Dejaste cambios guardados en <b>{status.branch}</b>.
+          </span>
+          <button className="btn small primary" disabled={!!busy} onClick={() => void restore(status.savedChanges!)}>
+            Restaurar cambios
+          </button>
+        </div>
+      )}
 
       {prPrompt && canPr && (
         <div className="banner-ok">
@@ -340,8 +377,37 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
       {tab === 'pulls' && (
         <PullsView
           project={project}
+          login={account.login}
           hasRemote={status.hasRemote}
           isGitHub={githubWebUrl(status.remoteUrl) !== null}
+          onChanged={loadOpenPrs}
+        />
+      )}
+
+      {switchTarget && status.branch && (
+        <SwitchBranchModal
+          current={status.branch}
+          target={switchTarget}
+          changeCount={files.length}
+          onClose={() => setSwitchTarget(null)}
+          onConfirm={(leave) => {
+            const target = switchTarget
+            setSwitchTarget(null)
+            void switchTo(target, leave)
+          }}
+        />
+      )}
+
+      {creatingBranch && (
+        <NewBranchModal
+          current={status.branch ?? 'HEAD'}
+          baseBranch={baseBranch}
+          dirty={dirty}
+          onClose={() => setCreatingBranch(false)}
+          onConfirm={(name, base, leave) => {
+            setCreatingBranch(false)
+            void createBranch(name, base, leave)
+          }}
         />
       )}
 

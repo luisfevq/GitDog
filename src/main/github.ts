@@ -1,4 +1,4 @@
-import type { PullDetail, PullRequest, Repo } from '../shared/types'
+import type { MergeMethod, PullDetail, PullEvent, PullFile, PullRequest, Repo, ReviewEvent } from '../shared/types'
 
 const API = 'https://api.github.com'
 
@@ -35,6 +35,7 @@ async function request<T>(token: string, path: string, init: RequestInit = {}): 
     }
     throw new Error(`GitHub respondió ${res.status}${detail ? `: ${detail}` : ''}`)
   }
+  if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
 
@@ -97,6 +98,13 @@ export async function createRepo(
   return toRepo(r)
 }
 
+interface ApiRepoRef {
+  full_name: string
+  allow_merge_commit?: boolean
+  allow_squash_merge?: boolean
+  allow_rebase_merge?: boolean
+}
+
 interface ApiPull {
   number: number
   title: string
@@ -104,8 +112,8 @@ interface ApiPull {
   draft?: boolean
   merged_at: string | null
   user: { login: string; avatar_url: string } | null
-  head: { ref: string }
-  base: { ref: string }
+  head: { ref: string; repo?: ApiRepoRef | null }
+  base: { ref: string; repo?: ApiRepoRef | null }
   html_url: string
   created_at: string
   updated_at: string
@@ -152,15 +160,26 @@ export async function fetchPull(token: string, owner: string, repo: string, numb
       commits: number
       comments: number
       review_comments: number
+      mergeable: boolean | null
+      mergeable_state: string
     }
   >(token, `${repoPath(owner, repo)}/pulls/${number}`)
+  const target = p.base.repo
+  const mergeMethods: MergeMethod[] = []
+  if (target?.allow_merge_commit !== false) mergeMethods.push('merge')
+  if (target?.allow_squash_merge !== false) mergeMethods.push('squash')
+  if (target?.allow_rebase_merge !== false) mergeMethods.push('rebase')
   return {
     ...toPull(p),
     additions: p.additions,
     deletions: p.deletions,
     changedFiles: p.changed_files,
     commits: p.commits,
-    comments: p.comments + p.review_comments
+    comments: p.comments + p.review_comments,
+    mergeable: p.mergeable,
+    mergeableState: p.mergeable_state,
+    mergeMethods,
+    sameRepo: !!p.head.repo && !!target && p.head.repo.full_name === target.full_name
   }
 }
 
@@ -190,4 +209,128 @@ export async function createPull(
     body: JSON.stringify(input)
   })
   return toPull(p)
+}
+
+interface ApiUser {
+  login: string
+  avatar_url: string
+}
+
+export async function fetchPullFiles(token: string, owner: string, repo: string, number: number): Promise<PullFile[]> {
+  const files: PullFile[] = []
+  for (let page = 1; page <= 3; page++) {
+    const batch = await request<
+      {
+        filename: string
+        previous_filename?: string
+        status: string
+        additions: number
+        deletions: number
+        patch?: string
+      }[]
+    >(token, `${repoPath(owner, repo)}/pulls/${number}/files?per_page=100&page=${page}`)
+    files.push(
+      ...batch.map((f) => ({
+        path: f.filename,
+        previousPath: f.previous_filename,
+        status: f.status,
+        additions: f.additions,
+        deletions: f.deletions,
+        patch: f.patch ?? null
+      }))
+    )
+    if (batch.length < 100) break
+  }
+  return files
+}
+
+export async function fetchPullConversation(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number
+): Promise<PullEvent[]> {
+  const base = repoPath(owner, repo)
+  const [reviews, comments, lines] = await Promise.all([
+    request<{ id: number; user: ApiUser | null; body: string | null; state: string; submitted_at: string | null }[]>(
+      token,
+      `${base}/pulls/${number}/reviews?per_page=100`
+    ),
+    request<{ id: number; user: ApiUser | null; body: string; created_at: string }[]>(
+      token,
+      `${base}/issues/${number}/comments?per_page=100`
+    ),
+    request<{ id: number; user: ApiUser | null; body: string; created_at: string; path: string }[]>(
+      token,
+      `${base}/pulls/${number}/comments?per_page=100`
+    )
+  ])
+
+  const who = (u: ApiUser | null): { author: string; authorAvatar: string } => ({
+    author: u?.login ?? 'ghost',
+    authorAvatar: u?.avatar_url ?? ''
+  })
+
+  const events: PullEvent[] = [
+    ...reviews
+      // A "commented" review without text only wraps line comments, which are listed below.
+      .filter((r) => r.state !== 'PENDING' && r.submitted_at && (r.state !== 'COMMENTED' || r.body?.trim()))
+      .map((r) => ({
+        id: `r${r.id}`,
+        kind: 'review' as const,
+        ...who(r.user),
+        state: r.state,
+        body: r.body ?? '',
+        createdAt: r.submitted_at as string
+      })),
+    ...comments.map((c) => ({
+      id: `c${c.id}`,
+      kind: 'comment' as const,
+      ...who(c.user),
+      body: c.body,
+      createdAt: c.created_at
+    })),
+    ...lines.map((c) => ({
+      id: `l${c.id}`,
+      kind: 'line' as const,
+      ...who(c.user),
+      body: c.body,
+      path: c.path,
+      createdAt: c.created_at
+    }))
+  ]
+  return events.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+}
+
+export async function submitReview(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+  event: ReviewEvent,
+  body: string
+): Promise<void> {
+  await request(token, `${repoPath(owner, repo)}/pulls/${number}/reviews`, {
+    method: 'POST',
+    body: JSON.stringify({ event, ...(body ? { body } : {}) })
+  })
+}
+
+export async function mergePull(
+  token: string,
+  owner: string,
+  repo: string,
+  number: number,
+  method: MergeMethod
+): Promise<void> {
+  const r = await request<{ merged: boolean; message: string }>(token, `${repoPath(owner, repo)}/pulls/${number}/merge`, {
+    method: 'PUT',
+    body: JSON.stringify({ merge_method: method })
+  })
+  if (!r.merged) throw new Error(r.message || 'GitHub no pudo fusionar el pull request.')
+}
+
+export async function deleteBranch(token: string, owner: string, repo: string, branch: string): Promise<void> {
+  const ref = branch.split('/').map(encodeURIComponent).join('/')
+  await request(token, `${repoPath(owner, repo)}/git/refs/heads/${ref}`, { method: 'DELETE' })
 }

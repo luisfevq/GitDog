@@ -49,6 +49,8 @@ export interface RepoStatus {
   hasRemote: boolean
   remoteUrl: string | null
   tagCount: number
+  /** Stash ref (stash@{n}) of changes left on this branch with "leave my changes" */
+  savedChanges: string | null
   files: FileChange[]
 }
 
@@ -87,12 +89,45 @@ export interface PullRequest {
   body: string
 }
 
+export type MergeMethod = 'merge' | 'squash' | 'rebase'
+export type ReviewEvent = 'APPROVE' | 'COMMENT' | 'REQUEST_CHANGES'
+
 export interface PullDetail extends PullRequest {
   additions: number
   deletions: number
   changedFiles: number
   commits: number
   comments: number
+  /** null while GitHub is still computing it */
+  mergeable: boolean | null
+  /** clean, blocked, behind, dirty, unstable, draft, unknown */
+  mergeableState: string
+  mergeMethods: MergeMethod[]
+  /** Branch lives in the same repo (not a fork), so it can be deleted after merge */
+  sameRepo: boolean
+}
+
+export interface PullFile {
+  path: string
+  previousPath?: string
+  status: string
+  additions: number
+  deletions: number
+  /** null for binary or very large files */
+  patch: string | null
+}
+
+export interface PullEvent {
+  id: string
+  kind: 'review' | 'comment' | 'line'
+  author: string
+  authorAvatar: string
+  /** Review state from GitHub: APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED */
+  state?: string
+  body: string
+  /** File path for line comments */
+  path?: string
+  createdAt: string
 }
 
 export interface PrDraft {
@@ -149,7 +184,11 @@ export interface Api {
   push(id: string): Promise<string>
   pull(id: string): Promise<string>
   branches(id: string): Promise<string[]>
-  checkout(id: string, branch: string, create: boolean): Promise<void>
+  /** leaveChanges: stash local changes on the current branch first instead of carrying them over */
+  switchBranch(id: string, branch: string, leaveChanges: boolean): Promise<void>
+  /** base: branch to start from, or null for the current commit */
+  createBranch(id: string, name: string, base: string | null, leaveChanges: boolean): Promise<void>
+  restoreChanges(id: string, ref: string): Promise<void>
   log(id: string): Promise<CommitInfo[]>
 
   tags(id: string): Promise<TagInfo[]>
@@ -163,6 +202,10 @@ export interface Api {
   prBranches(id: string): Promise<string[]>
   prDraft(id: string, base: string): Promise<PrDraft>
   createPull(id: string, input: CreatePullInput): Promise<PullRequest>
+  pullFiles(id: string, number: number): Promise<PullFile[]>
+  pullConversation(id: string, number: number): Promise<PullEvent[]>
+  reviewPull(id: string, number: number, event: ReviewEvent, body: string): Promise<void>
+  mergePull(id: string, number: number, method: MergeMethod, deleteBranch: boolean): Promise<string>
 
   openExternal(url: string): Promise<void>
   revealInFinder(path: string): Promise<void>
@@ -193,7 +236,9 @@ export const API_METHODS: (keyof Api)[] = [
   'push',
   'pull',
   'branches',
-  'checkout',
+  'switchBranch',
+  'createBranch',
+  'restoreChanges',
   'log',
   'tags',
   'createTag',
@@ -205,6 +250,10 @@ export const API_METHODS: (keyof Api)[] = [
   'prBranches',
   'prDraft',
   'createPull',
+  'pullFiles',
+  'pullConversation',
+  'reviewPull',
+  'mergePull',
   'openExternal',
   'revealInFinder'
 ]

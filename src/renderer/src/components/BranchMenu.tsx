@@ -1,15 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
-import { BranchIcon, CheckIcon } from './Icons'
+import { BranchIcon, CheckIcon, PlusIcon } from './Icons'
 
 interface Props {
   current: string | null
   branches: string[]
-  onCheckout: (branch: string, create: boolean) => void
+  onSwitch: (branch: string) => void
+  onCreate: () => void
 }
 
-export function BranchMenu({ current, branches, onCheckout }: Props): JSX.Element {
+export function BranchMenu({ current, branches, onSwitch, onCreate }: Props): JSX.Element {
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -20,14 +20,6 @@ export function BranchMenu({ current, branches, onCheckout }: Props): JSX.Elemen
     window.addEventListener('mousedown', onDown)
     return () => window.removeEventListener('mousedown', onDown)
   }, [open])
-
-  const create = (): void => {
-    const branch = name.trim().replace(/\s+/g, '-')
-    if (!branch) return
-    setOpen(false)
-    setName('')
-    onCheckout(branch, true)
-  }
 
   return (
     <div className="branch" ref={ref}>
@@ -45,7 +37,7 @@ export function BranchMenu({ current, branches, onCheckout }: Props): JSX.Elemen
                 className="pop-item"
                 onClick={() => {
                   setOpen(false)
-                  if (b !== current) onCheckout(b, false)
+                  if (b !== current) onSwitch(b)
                 }}
               >
                 <span className="grow">{b}</span>
@@ -54,17 +46,15 @@ export function BranchMenu({ current, branches, onCheckout }: Props): JSX.Elemen
             ))}
           </div>
           <div className="pop-sep" />
-          <div className="new-branch">
-            <input
-              placeholder="Nueva rama…"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && create()}
-            />
-            <button className="btn small" disabled={!name.trim()} onClick={create}>
-              Crear
-            </button>
-          </div>
+          <button
+            className="pop-item"
+            onClick={() => {
+              setOpen(false)
+              onCreate()
+            }}
+          >
+            <PlusIcon size={14} /> Nueva rama…
+          </button>
         </div>
       )}
     </div>

@@ -136,11 +136,15 @@ export async function status(cwd: string): Promise<RepoStatus> {
     })
   }
 
+  const branchInfo = parseBranchHeader(header.replace(/^## /, ''))
+  const savedChanges = branchInfo.branch ? await savedChangesRef(cwd, branchInfo.branch) : null
+
   return {
-    ...parseBranchHeader(header.replace(/^## /, '')),
+    ...branchInfo,
     hasCommits: head.code === 0,
     hasRemote: remote.stdout.trim().length > 0,
     remoteUrl: remote.stdout.trim() || null,
+    savedChanges,
     tagCount: tagList.stdout.split('\n').filter(Boolean).length,
     files
   }
@@ -290,4 +294,41 @@ export async function deleteTag(cwd: string, name: string, alsoRemote: boolean, 
 export async function commitsAhead(cwd: string, base: string): Promise<string[]> {
   const { stdout } = await git(cwd, ['log', '--format=%s', `origin/${base}..HEAD`], { okCodes: [0, 128] })
   return stdout.split('\n').filter(Boolean)
+}
+
+/** Changes left on a branch are stashed with the message "gitdog:<branch>". */
+export async function stashSave(cwd: string, branch: string): Promise<void> {
+  await git(cwd, ['stash', 'push', '--include-untracked', '-m', `gitdog:${branch}`])
+}
+
+export async function stashPop(cwd: string, ref?: string): Promise<void> {
+  await git(cwd, ref ? ['stash', 'pop', ref] : ['stash', 'pop'])
+}
+
+export async function savedChangesRef(cwd: string, branch: string): Promise<string | null> {
+  const { stdout } = await git(cwd, ['stash', 'list', '--format=%gd%x1f%gs'], { okCodes: [0, 128] })
+  for (const line of stdout.split('\n')) {
+    const [ref, subject] = line.split('\x1f')
+    if (ref && subject?.endsWith(`gitdog:${branch}`)) return ref
+  }
+  return null
+}
+
+async function refExists(cwd: string, ref: string): Promise<boolean> {
+  return (await git(cwd, ['rev-parse', '-q', '--verify', ref], { okCodes: [0, 1, 128] })).code === 0
+}
+
+export async function isValidBranchName(cwd: string, name: string): Promise<boolean> {
+  if (!name || name.startsWith('-')) return false
+  return (await git(cwd, ['check-ref-format', '--branch', name], { okCodes: [0, 128] })).code === 0
+}
+
+/** New branch from `base` (a local branch, else origin/<base>), or from the current commit when base is null. */
+export async function createBranchFrom(cwd: string, name: string, base: string | null): Promise<void> {
+  if (!base) {
+    await git(cwd, ['checkout', '-b', name])
+    return
+  }
+  const start = (await refExists(cwd, `refs/heads/${base}`)) ? base : `origin/${base}`
+  await git(cwd, ['checkout', '-b', name, '--no-track', start])
 }
