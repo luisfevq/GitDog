@@ -1372,3 +1372,50 @@ input[type='checkbox'] {
 .tag-name {
   flex-wrap: wrap;
 }
+
+/* ---------- Create PR ---------- */
+
+.banner-ok {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: rgba(10, 132, 255, 0.14);
+  border-bottom: 1px solid rgba(10, 132, 255, 0.35);
+}
+
+.banner-ok span {
+  flex: 1;
+}
+
+.pr-route {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+}
+
+select {
+  height: 30px;
+  padding: 0 28px 0 10px;
+  background: var(--bg) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23a1a1a8' stroke-width='1.6'%3E%3Cpath d='m1 1 4 4 4-4'/%3E%3C/svg%3E") no-repeat right 10px center;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  appearance: none;
+  outline: none;
+  min-width: 160px;
+}
+
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+.warn-text {
+  color: var(--orange);
+}
+
+.tool-btn.accent:disabled {
+  color: var(--text-3);
+  border-color: var(--line-strong);
+}

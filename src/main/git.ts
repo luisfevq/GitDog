@@ -105,10 +105,11 @@ function parseBranchHeader(raw: string): Pick<RepoStatus, 'branch' | 'upstream' 
 }
 
 export async function status(cwd: string): Promise<RepoStatus> {
-  const [{ stdout }, head, remote] = await Promise.all([
+  const [{ stdout }, head, remote, tagList] = await Promise.all([
     git(cwd, ['status', '--porcelain=v1', '-z', '-b', '--untracked-files=all']),
     git(cwd, ['rev-parse', '-q', '--verify', 'HEAD'], { okCodes: [0, 1, 128] }),
-    git(cwd, ['config', '--get', 'remote.origin.url'], { okCodes: [0, 1] })
+    git(cwd, ['config', '--get', 'remote.origin.url'], { okCodes: [0, 1] }),
+    git(cwd, ['tag', '--list'])
   ])
 
   const parts = stdout.split('\0')
@@ -140,6 +141,7 @@ export async function status(cwd: string): Promise<RepoStatus> {
     hasCommits: head.code === 0,
     hasRemote: remote.stdout.trim().length > 0,
     remoteUrl: remote.stdout.trim() || null,
+    tagCount: tagList.stdout.split('\n').filter(Boolean).length,
     files
   }
 }
@@ -282,4 +284,10 @@ export async function pushTag(cwd: string, name: string, auth: Auth): Promise<vo
 export async function deleteTag(cwd: string, name: string, alsoRemote: boolean, auth: Auth): Promise<void> {
   await git(cwd, ['tag', '-d', name])
   if (alsoRemote) await git(cwd, ['push', 'origin', `:refs/tags/${name}`], { auth })
+}
+
+/** Subjects of the commits on HEAD that origin/<base> does not have, newest first. */
+export async function commitsAhead(cwd: string, base: string): Promise<string[]> {
+  const { stdout } = await git(cwd, ['log', '--format=%s', `origin/${base}..HEAD`], { okCodes: [0, 128] })
+  return stdout.split('\n').filter(Boolean)
 }

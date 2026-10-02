@@ -163,3 +163,31 @@ export async function fetchPull(token: string, owner: string, repo: string, numb
     comments: p.comments + p.review_comments
   }
 }
+
+export async function fetchDefaultBranch(token: string, owner: string, repo: string): Promise<string> {
+  const r = await request<{ default_branch: string }>(token, repoPath(owner, repo))
+  return r.default_branch
+}
+
+export async function fetchBranches(token: string, owner: string, repo: string): Promise<string[]> {
+  const names: string[] = []
+  for (let page = 1; page <= 5; page++) {
+    const batch = await request<{ name: string }[]>(token, `${repoPath(owner, repo)}/branches?per_page=100&page=${page}`)
+    names.push(...batch.map((b) => b.name))
+    if (batch.length < 100) break
+  }
+  return names
+}
+
+export async function createPull(
+  token: string,
+  owner: string,
+  repo: string,
+  input: { title: string; body: string; head: string; base: string; draft: boolean }
+): Promise<PullRequest> {
+  const p = await request<ApiPull>(token, `${repoPath(owner, repo)}/pulls`, {
+    method: 'POST',
+    body: JSON.stringify(input)
+  })
+  return toPull(p)
+}

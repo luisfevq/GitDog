@@ -104,3 +104,13 @@ export const ExternalIcon = (p: P): JSX.Element => (
     <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
   </Svg>
 )
+export const PullRequestIcon = (p: P): JSX.Element => (
+  <Svg {...p}>
+    <circle cx="6" cy="5" r="2" />
+    <circle cx="6" cy="19" r="2" />
+    <circle cx="18" cy="19" r="2" />
+    <path d="M6 7v10" />
+    <path d="M18 17V9a2 2 0 0 0-2-2h-4" />
+    <path d="m14 4-3 3 3 3" />
+  </Svg>
+)

@@ -48,6 +48,7 @@ export interface RepoStatus {
   hasCommits: boolean
   hasRemote: boolean
   remoteUrl: string | null
+  tagCount: number
   files: FileChange[]
 }
 
@@ -92,6 +93,20 @@ export interface PullDetail extends PullRequest {
   changedFiles: number
   commits: number
   comments: number
+}
+
+export interface PrDraft {
+  title: string
+  body: string
+  /** Commits of the current branch that the base branch does not have */
+  commits: number
+}
+
+export interface CreatePullInput {
+  title: string
+  body: string
+  base: string
+  draft: boolean
 }
 
 export interface PublishOptions {
@@ -144,6 +159,10 @@ export interface Api {
 
   listPulls(id: string, state: 'open' | 'closed' | 'all'): Promise<PullRequest[]>
   pullDetail(id: string, number: number): Promise<PullDetail>
+  defaultBranch(id: string): Promise<string>
+  prBranches(id: string): Promise<string[]>
+  prDraft(id: string, base: string): Promise<PrDraft>
+  createPull(id: string, input: CreatePullInput): Promise<PullRequest>
 
   openExternal(url: string): Promise<void>
   revealInFinder(path: string): Promise<void>
@@ -182,6 +201,10 @@ export const API_METHODS: (keyof Api)[] = [
   'deleteTag',
   'listPulls',
   'pullDetail',
+  'defaultBranch',
+  'prBranches',
+  'prDraft',
+  'createPull',
   'openExternal',
   'revealInFinder'
 ]

@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { basename, join } from 'path'
 import { githubRepoRef } from '../shared/github-url'
-import type { Account, Api, Project, Snapshot } from '../shared/types'
+import type { Account, Api, PrDraft, Project, Snapshot } from '../shared/types'
 import { API_METHODS } from '../shared/types'
 import * as git from './git'
 import type { Auth } from './git'
@@ -81,6 +81,13 @@ function checkTagName(name: string): void {
   if (!/^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(name) || name.includes('..') || name.endsWith('/') || name.endsWith('.lock')) {
     throw new Error('Nombre de tag no válido. Usa letras, números, punto, guion o barra. Ejemplo: v1.0.0')
   }
+}
+
+/** "feature/add-login_page" -> "Add login page" */
+function titleFromBranch(branch: string): string {
+  const last = branch.split('/').pop() ?? branch
+  const text = last.replace(/[-_]+/g, ' ').trim()
+  return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
 function requireActive(): string {
@@ -273,6 +280,48 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const { project, auth } = context(id)
       const { owner, repo } = repoRef(project)
       return github.fetchPull(auth.token, owner, repo, number)
+    },
+
+    async defaultBranch(id) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      return github.fetchDefaultBranch(auth.token, owner, repo)
+    },
+
+    async prBranches(id) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      return github.fetchBranches(auth.token, owner, repo)
+    },
+
+    async prDraft(id, base): Promise<PrDraft> {
+      const { project } = context(id)
+      const [subjects, current] = await Promise.all([git.commitsAhead(project.path, base), git.status(project.path)])
+      return {
+        title: subjects.length === 1 ? subjects[0] : titleFromBranch(current.branch ?? ''),
+        body: subjects.length > 1 ? [...subjects].reverse().map((s) => `- ${s}`).join('\n') : '',
+        commits: subjects.length
+      }
+    },
+
+    async createPull(id, input) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      const current = await git.status(project.path)
+      if (!current.branch) throw new Error('No hay una rama activa.')
+      if (!current.upstream) throw new Error('Sube la rama a GitHub (Push) antes de crear el pull request.')
+      if (!input.title.trim()) throw new Error('Escribe un título.')
+      if (!input.base) throw new Error('Elige la rama destino.')
+      // The branch name on GitHub comes from the upstream, e.g. "origin/feature/x" -> "feature/x".
+      const head = current.upstream.replace(/^[^/]+\//, '') || current.branch
+      if (head === input.base) throw new Error('La rama del PR y la rama destino son la misma.')
+      return github.createPull(auth.token, owner, repo, {
+        title: input.title.trim(),
+        body: input.body,
+        base: input.base,
+        draft: input.draft,
+        head
+      })
     },
 
     async openExternal(url) {

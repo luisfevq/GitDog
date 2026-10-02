@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { Account, CommitInfo, FileChange, Project, RepoStatus, Snapshot } from '@shared/types'
+import type { Account, CommitInfo, FileChange, Project, PullRequest, RepoStatus, Snapshot } from '@shared/types'
 import { BranchMenu } from './BranchMenu'
 import { DiffView } from './DiffView'
-import { ArrowDownIcon, ArrowUpIcon, RefreshIcon, UploadIcon } from './Icons'
+import { ArrowDownIcon, ArrowUpIcon, PullRequestIcon, RefreshIcon, UploadIcon } from './Icons'
+import { CreatePrModal } from './CreatePrModal'
 import { PublishModal } from './PublishModal'
 import { PullsView } from './PullsView'
 import { TagsView } from './TagsView'
@@ -37,6 +38,10 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
   const [busy, setBusy] = useState<string | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [publishing, setPublishing] = useState(false)
+  const [defaultBranch, setDefaultBranch] = useState<string | null>(null)
+  const [prPrompt, setPrPrompt] = useState(false)
+  const [creatingPr, setCreatingPr] = useState(false)
+  const [openPrs, setOpenPrs] = useState<number | null>(null)
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -74,6 +79,52 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
       .then(setCommits)
       .catch((e: Error) => setLoadError(e.message))
   }, [tab, id, status?.hasCommits, status?.ahead])
+
+  const isGitHub = githubWebUrl(status?.remoteUrl ?? null) !== null
+  const hasRemote = status?.hasRemote ?? false
+
+  // Name of the repo's main branch. Until it loads, main and master count as main.
+  useEffect(() => {
+    if (!isGitHub || !hasRemote) return
+    window.api
+      .defaultBranch(id)
+      .then(setDefaultBranch)
+      .catch(() => setDefaultBranch(''))
+  }, [id, isGitHub, hasRemote])
+
+  const branch = status?.branch ?? null
+  const onMainBranch = defaultBranch ? branch === defaultBranch : branch === 'main' || branch === 'master'
+  // The button shows on any feature branch. It unlocks once everything is pushed.
+  const showPrButton = isGitHub && hasRemote && !!branch && !onMainBranch
+  const canPr = showPrButton && !!status?.upstream && status.ahead === 0
+  const prHint = !status?.upstream
+    ? 'Sube la rama con Push para poder crear el pull request'
+    : (status?.ahead ?? 0) > 0
+      ? 'Tienes commits sin subir. Haz Push para incluirlos en el pull request'
+      : 'Crear pull request'
+
+  const loadOpenPrs = useCallback((): void => {
+    if (!isGitHub || !hasRemote) {
+      setOpenPrs(null)
+      return
+    }
+    window.api
+      .listPulls(id, 'open')
+      .then((list) => setOpenPrs(list.length))
+      .catch(() => setOpenPrs(null))
+  }, [id, isGitHub, hasRemote])
+
+  useEffect(() => {
+    loadOpenPrs()
+    const timer = setInterval(loadOpenPrs, 120_000)
+    window.addEventListener('focus', loadOpenPrs)
+    return () => {
+      clearInterval(timer)
+      window.removeEventListener('focus', loadOpenPrs)
+    }
+  }, [loadOpenPrs])
+
+  useEffect(() => setPrPrompt(false), [branch])
 
   const files = status?.files ?? []
   const selected = useMemo(() => files.find((f) => f.path === selectedPath) ?? files[0] ?? null, [files, selectedPath])
@@ -131,6 +182,7 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
   const push = (): Promise<void> =>
     run('push', async () => {
       await window.api.push(id)
+      if (isGitHub && branch && !onMainBranch) setPrPrompt(true)
       return 'Push completado'
     })
 
@@ -159,6 +211,11 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
             <UploadIcon size={15} /> Publicar en {account.login}
           </button>
         )}
+        {showPrButton && (
+          <button className="tool-btn accent" disabled={!canPr} title={prHint} onClick={() => setCreatingPr(true)}>
+            <PullRequestIcon size={15} /> Crear PR
+          </button>
+        )}
         <button className="tool-btn" disabled={!status.hasRemote || !!busy} onClick={pull}>
           <ArrowDownIcon size={15} /> Pull {status.behind > 0 && <b className="count">{status.behind}</b>}
         </button>
@@ -172,6 +229,20 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
 
       {loadError && <div className="banner">{loadError}</div>}
 
+      {prPrompt && canPr && (
+        <div className="banner-ok">
+          <span>
+            Subiste la rama <b>{branch}</b>. ¿Quieres abrir un pull request?
+          </span>
+          <button className="btn small primary" onClick={() => setCreatingPr(true)}>
+            Crear pull request
+          </button>
+          <button className="icon-btn" aria-label="Cerrar aviso" onClick={() => setPrPrompt(false)}>
+            ×
+          </button>
+        </div>
+      )}
+
       <div className="tabs">
         <button className={tab === 'changes' ? 'on' : ''} onClick={() => setTab('changes')}>
           Cambios {files.length > 0 && <span className="pill">{files.length}</span>}
@@ -180,10 +251,10 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
           Historial
         </button>
         <button className={tab === 'tags' ? 'on' : ''} onClick={() => setTab('tags')}>
-          Tags
+          Tags {status.tagCount > 0 && <span className="pill">{status.tagCount}</span>}
         </button>
         <button className={tab === 'pulls' ? 'on' : ''} onClick={() => setTab('pulls')}>
-          Pull requests
+          Pull requests {openPrs !== null && openPrs > 0 && <span className="pill">{openPrs >= 50 ? '50+' : openPrs}</span>}
         </button>
       </div>
 
@@ -271,6 +342,22 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
           project={project}
           hasRemote={status.hasRemote}
           isGitHub={githubWebUrl(status.remoteUrl) !== null}
+        />
+      )}
+
+      {creatingPr && branch && (
+        <CreatePrModal
+          project={project}
+          head={branch}
+          ahead={status.ahead}
+          onClose={() => setCreatingPr(false)}
+          onCreated={(pr: PullRequest) => {
+            setCreatingPr(false)
+            setPrPrompt(false)
+            setTab('pulls')
+            loadOpenPrs()
+            toast(`Pull request #${pr.number} creado`)
+          }}
         />
       )}
 
