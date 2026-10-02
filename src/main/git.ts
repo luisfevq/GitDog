@@ -1,7 +1,7 @@
 import { execFile } from 'child_process'
 import { chmodSync, realpathSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { CommitInfo, FileChange, RepoStatus } from '../shared/types'
+import type { CommitInfo, FileChange, RepoStatus, TagInfo } from '../shared/types'
 
 /** Credentials of the account that owns a project. Passed per command, never written to disk. */
 export interface Auth {
@@ -199,7 +199,7 @@ export async function checkout(cwd: string, branch: string, create: boolean): Pr
 }
 
 export async function log(cwd: string): Promise<CommitInfo[]> {
-  const { stdout } = await git(cwd, ['log', '-n', '100', '--format=%H%x1f%an%x1f%ar%x1f%s'], {
+  const { stdout } = await git(cwd, ['log', '-n', '100', '--format=%H%x1f%an%x1f%cI%x1f%s'], {
     okCodes: [0, 128]
   })
   return stdout
@@ -237,4 +237,49 @@ export async function addRemote(cwd: string, url: string): Promise<void> {
 
 export async function clone(parentDir: string, url: string, name: string, auth: Auth): Promise<void> {
   await git(parentDir, ['clone', url, name], { auth })
+}
+
+export async function tags(cwd: string, auth: Auth): Promise<TagInfo[]> {
+  const { stdout } = await git(cwd, [
+    'tag',
+    '--sort=-creatordate',
+    '--format=%(refname:short)%1f%(objectname:short)%1f%(creatordate:iso-strict)%1f%(contents:subject)%1f%(objecttype)'
+  ])
+
+  let remote: Set<string> | null = null
+  if (await remoteUrl(cwd)) {
+    try {
+      const out = (await git(cwd, ['ls-remote', '--tags', '--refs', 'origin'], { auth })).stdout
+      remote = new Set(
+        out
+          .split('\n')
+          .map((l) => l.split('\t')[1]?.replace('refs/tags/', ''))
+          .filter((n): n is string => !!n)
+      )
+    } catch {
+      remote = null // offline or no access: show the tags without remote status
+    }
+  }
+
+  return stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [name, hash, date, subject, type] = line.split('\x1f')
+      return { name, hash, date, subject, annotated: type === 'tag', onRemote: remote ? remote.has(name) : null }
+    })
+}
+
+export async function createTag(cwd: string, name: string, message: string, identity: Auth): Promise<void> {
+  const args = message ? ['tag', '-a', name, '-m', message] : ['tag', name]
+  await git(cwd, args, { identity })
+}
+
+export async function pushTag(cwd: string, name: string, auth: Auth): Promise<void> {
+  await git(cwd, ['push', 'origin', `refs/tags/${name}`], { auth })
+}
+
+export async function deleteTag(cwd: string, name: string, alsoRemote: boolean, auth: Auth): Promise<void> {
+  await git(cwd, ['tag', '-d', name])
+  if (alsoRemote) await git(cwd, ['push', 'origin', `:refs/tags/${name}`], { auth })
 }

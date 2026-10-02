@@ -58,6 +58,42 @@ export interface CommitInfo {
   subject: string
 }
 
+export interface TagInfo {
+  name: string
+  hash: string
+  /** ISO date */
+  date: string
+  subject: string
+  annotated: boolean
+  /** null when GitHub could not be reached */
+  onRemote: boolean | null
+}
+
+export type PullState = 'open' | 'closed' | 'merged'
+
+export interface PullRequest {
+  number: number
+  title: string
+  state: PullState
+  draft: boolean
+  author: string
+  authorAvatar: string
+  head: string
+  base: string
+  url: string
+  createdAt: string
+  updatedAt: string
+  body: string
+}
+
+export interface PullDetail extends PullRequest {
+  additions: number
+  deletions: number
+  changedFiles: number
+  commits: number
+  comments: number
+}
+
 export interface PublishOptions {
   name: string
   description: string
@@ -101,6 +137,14 @@ export interface Api {
   checkout(id: string, branch: string, create: boolean): Promise<void>
   log(id: string): Promise<CommitInfo[]>
 
+  tags(id: string): Promise<TagInfo[]>
+  createTag(id: string, name: string, message: string, push: boolean): Promise<void>
+  pushTag(id: string, name: string): Promise<void>
+  deleteTag(id: string, name: string, alsoRemote: boolean): Promise<void>
+
+  listPulls(id: string, state: 'open' | 'closed' | 'all'): Promise<PullRequest[]>
+  pullDetail(id: string, number: number): Promise<PullDetail>
+
   openExternal(url: string): Promise<void>
   revealInFinder(path: string): Promise<void>
 }
@@ -132,6 +176,12 @@ export const API_METHODS: (keyof Api)[] = [
   'branches',
   'checkout',
   'log',
+  'tags',
+  'createTag',
+  'pushTag',
+  'deleteTag',
+  'listPulls',
+  'pullDetail',
   'openExternal',
   'revealInFinder'
 ]

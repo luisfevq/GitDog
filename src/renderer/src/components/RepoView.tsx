@@ -4,6 +4,10 @@ import { BranchMenu } from './BranchMenu'
 import { DiffView } from './DiffView'
 import { ArrowDownIcon, ArrowUpIcon, RefreshIcon, UploadIcon } from './Icons'
 import { PublishModal } from './PublishModal'
+import { PullsView } from './PullsView'
+import { TagsView } from './TagsView'
+import { timeAgo } from '../lib/time'
+import { githubWebUrl } from '@shared/github-url'
 import { useToast } from './Toast'
 
 interface Props {
@@ -12,7 +16,7 @@ interface Props {
   onState: (state: Snapshot) => void
 }
 
-type Tab = 'changes' | 'history'
+type Tab = 'changes' | 'history' | 'tags' | 'pulls'
 
 const splitPath = (path: string): { dir: string; file: string } => {
   const i = path.lastIndexOf('/')
@@ -175,9 +179,15 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
         <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>
           Historial
         </button>
+        <button className={tab === 'tags' ? 'on' : ''} onClick={() => setTab('tags')}>
+          Tags
+        </button>
+        <button className={tab === 'pulls' ? 'on' : ''} onClick={() => setTab('pulls')}>
+          Pull requests
+        </button>
       </div>
 
-      {tab === 'changes' ? (
+      {tab === 'changes' && (
         <div className="split">
           <div className="files-col">
             <div className="files-head">
@@ -230,18 +240,38 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
             {selected ? <DiffView text={diffText} /> : <div className="diff-empty">Elige un archivo para ver los cambios.</div>}
           </div>
         </div>
-      ) : (
+      )}
+
+      {tab === 'history' && (
         <div className="history">
           {commits.length === 0 && <div className="empty-inline">Aún no hay commits.</div>}
           {commits.map((c) => (
             <div key={c.hash} className="commit-row">
               <div className="commit-subject">{c.subject}</div>
               <div className="commit-meta">
-                {c.author} · {c.date} · <code>{c.hash.slice(0, 7)}</code>
+                {c.author} · {timeAgo(c.date)} · <code>{c.hash.slice(0, 7)}</code>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {tab === 'tags' && (
+        <TagsView
+          project={project}
+          hasCommits={status.hasCommits}
+          hasRemote={status.hasRemote}
+          remoteUrl={status.remoteUrl}
+          onChanged={() => void refresh()}
+        />
+      )}
+
+      {tab === 'pulls' && (
+        <PullsView
+          project={project}
+          hasRemote={status.hasRemote}
+          isGitHub={githubWebUrl(status.remoteUrl) !== null}
+        />
       )}
 
       {publishing && (

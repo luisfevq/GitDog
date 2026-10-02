@@ -2,6 +2,7 @@ import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { basename, join } from 'path'
+import { githubRepoRef } from '../shared/github-url'
 import type { Account, Api, Project, Snapshot } from '../shared/types'
 import { API_METHODS } from '../shared/types'
 import * as git from './git'
@@ -68,6 +69,18 @@ async function connectAccount(token: string): Promise<Snapshot> {
   config.activeAccount = account.login
   saveConfig()
   return snapshot()
+}
+
+function repoRef(project: Project): { owner: string; repo: string } {
+  const ref = githubRepoRef(project.remoteUrl)
+  if (!ref) throw new Error('Este proyecto no tiene un remoto de GitHub. Publícalo primero.')
+  return ref
+}
+
+function checkTagName(name: string): void {
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(name) || name.includes('..') || name.endsWith('/') || name.endsWith('.lock')) {
+    throw new Error('Nombre de tag no válido. Usa letras, números, punto, guion o barra. Ejemplo: v1.0.0')
+  }
 }
 
 function requireActive(): string {
@@ -217,6 +230,50 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     branches: (id) => git.branches(context(id).project.path),
     checkout: (id, branch, create) => git.checkout(context(id).project.path, branch, create),
     log: (id) => git.log(context(id).project.path),
+
+    tags(id) {
+      const { project, auth } = context(id)
+      return git.tags(project.path, auth)
+    },
+
+    async createTag(id, name, message, push) {
+      const { project, auth } = context(id)
+      checkTagName(name)
+      const status = await git.status(project.path)
+      if (!status.hasCommits) throw new Error('Haz al menos un commit antes de crear un tag.')
+      await git.createTag(project.path, name, message.trim(), auth)
+      if (push) {
+        try {
+          await git.pushTag(project.path, name, auth)
+        } catch (e) {
+          throw new Error(`El tag se creó, pero no se pudo subir: ${(e as Error).message}`)
+        }
+      }
+    },
+
+    async pushTag(id, name) {
+      const { project, auth } = context(id)
+      checkTagName(name)
+      await git.pushTag(project.path, name, auth)
+    },
+
+    async deleteTag(id, name, alsoRemote) {
+      const { project, auth } = context(id)
+      checkTagName(name)
+      await git.deleteTag(project.path, name, alsoRemote, auth)
+    },
+
+    async listPulls(id, state) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      return github.fetchPulls(auth.token, owner, repo, state)
+    },
+
+    async pullDetail(id, number) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      return github.fetchPull(auth.token, owner, repo, number)
+    },
 
     async openExternal(url) {
       if (!/^https:\/\/github\.com\//.test(url)) throw new Error('URL no permitida.')
