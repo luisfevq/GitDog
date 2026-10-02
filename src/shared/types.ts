@@ -48,6 +48,7 @@ export interface RepoStatus {
   hasCommits: boolean
   hasRemote: boolean
   remoteUrl: string | null
+  tagCount: number
   files: FileChange[]
 }
 
@@ -56,6 +57,56 @@ export interface CommitInfo {
   author: string
   date: string
   subject: string
+}
+
+export interface TagInfo {
+  name: string
+  hash: string
+  /** ISO date */
+  date: string
+  subject: string
+  annotated: boolean
+  /** null when GitHub could not be reached */
+  onRemote: boolean | null
+}
+
+export type PullState = 'open' | 'closed' | 'merged'
+
+export interface PullRequest {
+  number: number
+  title: string
+  state: PullState
+  draft: boolean
+  author: string
+  authorAvatar: string
+  head: string
+  base: string
+  url: string
+  createdAt: string
+  updatedAt: string
+  body: string
+}
+
+export interface PullDetail extends PullRequest {
+  additions: number
+  deletions: number
+  changedFiles: number
+  commits: number
+  comments: number
+}
+
+export interface PrDraft {
+  title: string
+  body: string
+  /** Commits of the current branch that the base branch does not have */
+  commits: number
+}
+
+export interface CreatePullInput {
+  title: string
+  body: string
+  base: string
+  draft: boolean
 }
 
 export interface PublishOptions {
@@ -101,6 +152,18 @@ export interface Api {
   checkout(id: string, branch: string, create: boolean): Promise<void>
   log(id: string): Promise<CommitInfo[]>
 
+  tags(id: string): Promise<TagInfo[]>
+  createTag(id: string, name: string, message: string, push: boolean): Promise<void>
+  pushTag(id: string, name: string): Promise<void>
+  deleteTag(id: string, name: string, alsoRemote: boolean): Promise<void>
+
+  listPulls(id: string, state: 'open' | 'closed' | 'all'): Promise<PullRequest[]>
+  pullDetail(id: string, number: number): Promise<PullDetail>
+  defaultBranch(id: string): Promise<string>
+  prBranches(id: string): Promise<string[]>
+  prDraft(id: string, base: string): Promise<PrDraft>
+  createPull(id: string, input: CreatePullInput): Promise<PullRequest>
+
   openExternal(url: string): Promise<void>
   revealInFinder(path: string): Promise<void>
 }
@@ -132,6 +195,16 @@ export const API_METHODS: (keyof Api)[] = [
   'branches',
   'checkout',
   'log',
+  'tags',
+  'createTag',
+  'pushTag',
+  'deleteTag',
+  'listPulls',
+  'pullDetail',
+  'defaultBranch',
+  'prBranches',
+  'prDraft',
+  'createPull',
   'openExternal',
   'revealInFinder'
 ]

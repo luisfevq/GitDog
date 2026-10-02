@@ -1,4 +1,4 @@
-import type { Repo } from '../shared/types'
+import type { PullDetail, PullRequest, Repo } from '../shared/types'
 
 const API = 'https://api.github.com'
 
@@ -95,4 +95,99 @@ export async function createRepo(
     })
   })
   return toRepo(r)
+}
+
+interface ApiPull {
+  number: number
+  title: string
+  state: string
+  draft?: boolean
+  merged_at: string | null
+  user: { login: string; avatar_url: string } | null
+  head: { ref: string }
+  base: { ref: string }
+  html_url: string
+  created_at: string
+  updated_at: string
+  body: string | null
+}
+
+const toPull = (p: ApiPull): PullRequest => ({
+  number: p.number,
+  title: p.title,
+  state: p.merged_at ? 'merged' : p.state === 'open' ? 'open' : 'closed',
+  draft: !!p.draft,
+  author: p.user?.login ?? 'ghost',
+  authorAvatar: p.user?.avatar_url ?? '',
+  head: p.head.ref,
+  base: p.base.ref,
+  url: p.html_url,
+  createdAt: p.created_at,
+  updatedAt: p.updated_at,
+  body: p.body ?? ''
+})
+
+const repoPath = (owner: string, repo: string): string =>
+  `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+
+export async function fetchPulls(
+  token: string,
+  owner: string,
+  repo: string,
+  state: 'open' | 'closed' | 'all'
+): Promise<PullRequest[]> {
+  const list = await request<ApiPull[]>(
+    token,
+    `${repoPath(owner, repo)}/pulls?state=${state}&per_page=50&sort=updated&direction=desc`
+  )
+  return list.map(toPull)
+}
+
+export async function fetchPull(token: string, owner: string, repo: string, number: number): Promise<PullDetail> {
+  const p = await request<
+    ApiPull & {
+      additions: number
+      deletions: number
+      changed_files: number
+      commits: number
+      comments: number
+      review_comments: number
+    }
+  >(token, `${repoPath(owner, repo)}/pulls/${number}`)
+  return {
+    ...toPull(p),
+    additions: p.additions,
+    deletions: p.deletions,
+    changedFiles: p.changed_files,
+    commits: p.commits,
+    comments: p.comments + p.review_comments
+  }
+}
+
+export async function fetchDefaultBranch(token: string, owner: string, repo: string): Promise<string> {
+  const r = await request<{ default_branch: string }>(token, repoPath(owner, repo))
+  return r.default_branch
+}
+
+export async function fetchBranches(token: string, owner: string, repo: string): Promise<string[]> {
+  const names: string[] = []
+  for (let page = 1; page <= 5; page++) {
+    const batch = await request<{ name: string }[]>(token, `${repoPath(owner, repo)}/branches?per_page=100&page=${page}`)
+    names.push(...batch.map((b) => b.name))
+    if (batch.length < 100) break
+  }
+  return names
+}
+
+export async function createPull(
+  token: string,
+  owner: string,
+  repo: string,
+  input: { title: string; body: string; head: string; base: string; draft: boolean }
+): Promise<PullRequest> {
+  const p = await request<ApiPull>(token, `${repoPath(owner, repo)}/pulls`, {
+    method: 'POST',
+    body: JSON.stringify(input)
+  })
+  return toPull(p)
 }
