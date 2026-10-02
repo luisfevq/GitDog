@@ -46,8 +46,12 @@
         }
       ],
       "icon": "resources/icon.icns",
-      "artifactName": "GitDog-${version}-${arch}.${ext}"
-    }
+      "artifactName": "GitDog-${version}-${arch}.${ext}",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "afterPack": "scripts/after-pack.js"
   },
   "author": "Luis Felipe <luisfevq+gitdog@gmail.com>"
 }
