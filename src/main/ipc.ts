@@ -184,7 +184,16 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return snapshot()
     },
 
-    status: (id) => git.status(context(id).project.path),
+    async status(id) {
+      const { project } = context(id)
+      const result = await git.status(project.path)
+      // Keep the saved link in sync when the remote changes outside GitDog.
+      if (project.remoteUrl !== result.remoteUrl) {
+        project.remoteUrl = result.remoteUrl
+        saveConfig()
+      }
+      return result
+    },
     diff: (id, file) => git.diff(context(id).project.path, file),
     stage: (id, paths) => git.stage(context(id).project.path, paths),
     unstage: (id, paths) => git.unstage(context(id).project.path, paths),

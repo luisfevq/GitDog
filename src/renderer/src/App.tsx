@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { githubWebUrl } from '@shared/github-url'
 import type { Project, Snapshot } from '@shared/types'
 import { AccountMenu } from './components/AccountMenu'
 import { AddAccountModal } from './components/AddAccountModal'
 import { CloneModal } from './components/CloneModal'
+import { ExternalIcon } from './components/Icons'
 import { ConfirmModal } from './components/Modal'
 import { RepoView } from './components/RepoView'
 import { Sidebar } from './components/Sidebar'
@@ -41,6 +43,8 @@ function Workspace(): JSX.Element {
     [current.projects, current.activeAccount]
   )
   const selected = projects.find((p) => p.id === selectedId) ?? projects[0] ?? null
+
+  const repoUrl = githubWebUrl(selected?.remoteUrl ?? null)
 
   const switchAccount = (login: string): void => {
     setSelectedId(null)
@@ -84,7 +88,18 @@ function Workspace(): JSX.Element {
 
       <main className="main">
         <header className="topbar">
-          <div className="topbar-title">{selected ? selected.name : 'GitDog'}</div>
+          <div className="topbar-left">
+            <div className="topbar-title">{selected ? selected.name : 'GitDog'}</div>
+            {repoUrl && (
+              <button
+                className="repo-link"
+                title={repoUrl}
+                onClick={() => window.api.openExternal(repoUrl).catch(fail)}
+              >
+                <ExternalIcon size={13} /> Abrir en GitHub
+              </button>
+            )}
+          </div>
           <AccountMenu
             accounts={current.accounts}
             active={account}

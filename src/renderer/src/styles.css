@@ -1040,3 +1040,31 @@ input[type='checkbox'] {
     transform: rotate(360deg);
   }
 }
+
+/* ---------- Repo link ---------- */
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.repo-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--text-2);
+  font-size: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.repo-link:hover {
+  background: var(--bg-3);
+  color: var(--text);
+}

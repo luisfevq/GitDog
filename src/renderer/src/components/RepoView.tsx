@@ -56,6 +56,13 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
     }
   }, [refresh])
 
+  // The remote changed outside GitDog: reload the saved projects so the top bar link is right.
+  useEffect(() => {
+    if (status && status.remoteUrl !== project.remoteUrl) {
+      window.api.getState().then(onState).catch(() => undefined)
+    }
+  }, [status?.remoteUrl, project.remoteUrl, status, onState])
+
   useEffect(() => {
     if (tab !== 'history') return
     window.api

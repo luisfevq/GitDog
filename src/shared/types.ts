@@ -47,6 +47,7 @@ export interface RepoStatus {
   behind: number
   hasCommits: boolean
   hasRemote: boolean
+  remoteUrl: string | null
   files: FileChange[]
 }
 

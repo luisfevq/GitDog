@@ -97,3 +97,10 @@ export const LockIcon = (p: P): JSX.Element => (
     <path d="M8 11V8a4 4 0 0 1 8 0v3" />
   </Svg>
 )
+export const ExternalIcon = (p: P): JSX.Element => (
+  <Svg {...p}>
+    <path d="M14 4h6v6" />
+    <path d="M20 4 10 14" />
+    <path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" />
+  </Svg>
+)

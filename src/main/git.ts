@@ -139,6 +139,7 @@ export async function status(cwd: string): Promise<RepoStatus> {
     ...parseBranchHeader(header.replace(/^## /, '')),
     hasCommits: head.code === 0,
     hasRemote: remote.stdout.trim().length > 0,
+    remoteUrl: remote.stdout.trim() || null,
     files
   }
 }
