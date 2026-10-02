@@ -37,9 +37,17 @@
     "mac": {
       "category": "public.app-category.developer-tools",
       "target": [
-        "dmg"
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
       ],
-      "icon": "resources/icon.icns"
+      "icon": "resources/icon.icns",
+      "artifactName": "GitDog-${version}-${arch}.${ext}"
     }
-  }
+  },
+  "author": "Luis Felipe <luisfevq+gitdog@gmail.com>"
 }
