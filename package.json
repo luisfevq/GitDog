@@ -1,0 +1,38 @@
+{
+  "name": "gitdog",
+  "productName": "GitDog",
+  "version": "0.1.0",
+  "description": "Cliente Git de escritorio con varias cuentas de GitHub",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev --watch",
+    "build": "electron-vite build",
+    "start": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "dist": "npm run build && electron-builder --mac"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.gitdog.app",
+    "productName": "GitDog",
+    "files": ["out/**"],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": ["dmg"]
+    }
+  }
+}
