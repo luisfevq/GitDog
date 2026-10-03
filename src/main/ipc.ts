@@ -325,17 +325,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return github.fetchBranchPull(auth.token, owner, repo, branch)
     },
 
-    async checkUpdate() {
-      const tokens: string[] = []
-      for (const account of getConfig().accounts) {
-        try {
-          tokens.push(getToken(account.login))
-        } catch {
-          /* account without a stored token */
-        }
-      }
-      return checkForUpdate(app.getVersion(), tokens)
-    },
+    checkUpdate: () => checkForUpdate(app.getVersion()),
 
     tags(id) {
       const { project, auth } = context(id)

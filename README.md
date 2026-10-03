@@ -22,7 +22,7 @@
 - **Cambios pendientes**: al cambiar de rama con cambios, pregunta si los dejas o los llevas. Al crear una rama, pregunta si sale de la actual o de `main`.
 - **Tags**: crear (simples o anotados), subir, eliminar.
 - **Pull requests**: ver la lista, los archivos con su diff y la conversación. Crear PRs, dejar revisiones (aprobar, comentar, solicitar cambios) y hacer merge. Si la rama ya tiene un PR abierto, un push lo actualiza y la barra muestra **PR #n** en vez de ofrecer crear otro.
-- **Versiones nuevas**: al abrir, GitDog busca el último Release del repositorio y avisa si hay una versión más reciente.
+- **Versiones nuevas**: al abrir, y cada 6 horas, GitDog busca el último Release del repositorio y avisa si hay una versión más reciente. Si cierras el aviso, vuelve a aparecer a las 6 horas.
 - **Publicar**: convierte una carpeta local en un repositorio nuevo de la cuenta activa.
 
 ## Descargar e instalar (sin código)
@@ -40,18 +40,11 @@ Para saber cuál tienes: menú  → **Acerca de este Mac**. Si dice "Chip: Apple
 2. Arrastra **GitDog** a la carpeta **Aplicaciones**.
 3. Abre GitDog desde Launchpad o Spotlight.
 
-### Aviso la primera vez que lo abres
+### Seguridad
 
-GitDog no está firmado con una cuenta de Apple Developer, ni notarizado. macOS muestra una advertencia la primera vez. Es normal. Hay dos formas de abrirlo:
+Los instaladores de Releases están **firmados con Developer ID de Apple y notarizados**. macOS abre GitDog sin avisos. Descarga solo desde la sección Releases de este repositorio.
 
-- **Clic derecho** sobre GitDog en Aplicaciones, elige **Abrir** y confirma. Solo hace falta una vez.
-- O, en la Terminal:
-
-  ```bash
-  xattr -cr /Applications/GitDog.app
-  ```
-
-Instala solo instaladores que descargues de este repositorio.
+Si generas tu propio instalador con `npm run dist`, queda sin notarizar y macOS sí muestra un aviso. Mira [Solución de problemas](#solución-de-problemas).
 
 ## Conectar una cuenta
 
@@ -121,11 +114,11 @@ npm run dev
 npm run dist
 ```
 
-Crea dos archivos en `dist/`: `GitDog-<versión>-arm64.dmg` (Apple Silicon) y `GitDog-<versión>-x64.dmg` (Intel). La app se firma "ad hoc", sin certificado, así que cualquier persona puede generar el instalador sin cuenta de Apple Developer. Por eso macOS muestra el aviso descrito arriba.
+Crea dos archivos en `dist/`: `GitDog-<versión>-arm64.dmg` (Apple Silicon) y `GitDog-<versión>-x64.dmg` (Intel). Esta app se firma "ad hoc", sin certificado, así que cualquier persona puede generarla sin cuenta de Apple Developer. No está notarizada: macOS muestra un aviso la primera vez que se abre (mira [Solución de problemas](#solución-de-problemas)).
 
-#### Instalador firmado y notarizado (quita el aviso de macOS)
+#### Instalador firmado y notarizado (el de Releases)
 
-Solo para quien tenga una cuenta de Apple Developer (99 USD al año). Con firma **Developer ID** y notarización, macOS abre GitDog sin avisos, y el Keychain no vuelve a pedir permiso tras cada actualización.
+Así se generan los instaladores de Releases. Necesita una cuenta de Apple Developer (99 USD al año), y la firma lleva el nombre del titular de esa cuenta. Con firma **Developer ID** y notarización, macOS abre GitDog sin avisos, y el Keychain no debería volver a pedir permiso tras cada actualización.
 
 Necesitas:
 
@@ -139,7 +132,7 @@ Luego:
 npm run dist:signed
 ```
 
-El script pide lo que falte. La contraseña se escribe oculta y no se guarda en ningún archivo. Tarda unos minutos porque Apple revisa la app. La firma muestra el nombre del titular de la cuenta de Apple.
+El script pide lo que falte. La contraseña se escribe oculta y no se guarda en ningún archivo. Tarda unos minutos porque Apple revisa la app.
 
 ### Publicar una versión
 
@@ -189,7 +182,7 @@ Para agregar una función: define el método en `src/shared/types.ts` (interfaz 
 
 | Problema | Solución |
 | --- | --- |
-| macOS dice que GitDog "está dañado" o "no se puede abrir" | `xattr -cr /Applications/GitDog.app` o clic derecho → **Abrir** |
+| macOS dice que GitDog "está dañado" o "no se puede abrir" | Solo pasa con instaladores generados con `npm run dist` (sin notarizar). Haz clic derecho sobre GitDog → **Abrir**, o ejecuta `xattr -cr /Applications/GitDog.app`. El instalador de Releases no lo necesita |
 | "Token inválido o expirado" | Crea un token nuevo y vuelve a conectar la cuenta |
 | Error 403 o 404 en un repo de una organización | Autoriza el token para SSO, o pide acceso al repo |
 | Push rechazado en `.github/workflows/` | Añade el permiso `workflow` al token |

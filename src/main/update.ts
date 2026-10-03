@@ -25,30 +25,15 @@ interface Release {
   name: string | null
 }
 
-async function latest(token?: string): Promise<Release | null> {
-  const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'User-Agent': 'GitDog',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    }
-  })
-  return res.ok ? ((await res.json()) as Release) : null
-}
-
-/**
- * Looks for a newer release. Public repos answer without a token. While the repo is private,
- * the accounts signed in to GitDog are tried, so the check also works for the owner.
- * Any failure counts as "no update".
- */
-export async function checkForUpdate(current: string, tokens: string[]): Promise<UpdateInfo | null> {
+/** Looks for a newer release of the public repository. Any failure counts as "no update". */
+export async function checkForUpdate(current: string): Promise<UpdateInfo | null> {
   try {
-    let release = await latest()
-    for (const token of tokens) {
-      if (release) break
-      release = await latest(token)
-    }
-    if (!release || !isNewer(release.tag_name, current)) return null
+    const res = await fetch(`https://api.github.com/repos/${RELEASES_REPO}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'GitDog' }
+    })
+    if (!res.ok) return null
+    const release = (await res.json()) as Release
+    if (!isNewer(release.tag_name, current)) return null
     return { version: release.tag_name.replace(/^v/i, ''), url: release.html_url, name: release.name || release.tag_name }
   } catch {
     return null

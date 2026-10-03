@@ -18,6 +18,9 @@ type Dialog =
   | { kind: 'removeProject'; project: Project }
   | null
 
+/** How long a closed update notice stays hidden. */
+const UPDATE_REMINDER_MS = 6 * 60 * 60 * 1000
+
 const EMPTY: Snapshot = { accounts: [], projects: [], activeAccount: null }
 
 function Workspace(): JSX.Element {
@@ -26,13 +29,22 @@ function Workspace(): JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
   const [update, setUpdate] = useState<UpdateInfo | null>(null)
-  const [dismissed, setDismissed] = useState<string | null>(() => {
+  // Closing the notice hides it for 6 hours. It comes back after that, or sooner for a newer version.
+  const [dismissal, setDismissal] = useState<{ version: string; at: number } | null>(() => {
     try {
-      return localStorage.getItem('gitdog.dismissedUpdate')
+      const saved = JSON.parse(localStorage.getItem('gitdog.updateDismissed') ?? 'null') as { version: string; at: number } | null
+      return saved && typeof saved.version === 'string' && typeof saved.at === 'number' ? saved : null
     } catch {
       return null
     }
   })
+  const [now, setNow] = useState(() => Date.now())
+
+  // Re-evaluate once a minute, so the notice returns on time even if the app stays open.
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Look for a new release when GitDog opens, and every 6 hours after that.
   useEffect(() => {
@@ -44,7 +56,7 @@ function Workspace(): JSX.Element {
         .catch(() => undefined)
     }
     check()
-    const timer = setInterval(check, 6 * 60 * 60 * 1000)
+    const timer = setInterval(check, UPDATE_REMINDER_MS)
     return () => {
       alive = false
       clearInterval(timer)
@@ -52,13 +64,17 @@ function Workspace(): JSX.Element {
   }, [])
 
   const dismissUpdate = (version: string): void => {
-    setDismissed(version)
+    const value = { version, at: Date.now() }
+    setDismissal(value)
     try {
-      localStorage.setItem('gitdog.dismissedUpdate', version)
+      localStorage.setItem('gitdog.updateDismissed', JSON.stringify(value))
     } catch {
-      /* the notice just comes back next time */
+      /* the notice just comes back sooner */
     }
   }
+
+  const showUpdate =
+    !!update && !(dismissal && dismissal.version === update.version && now - dismissal.at < UPDATE_REMINDER_MS)
 
   useEffect(() => {
     window.api
@@ -143,7 +159,7 @@ function Workspace(): JSX.Element {
           />
         </header>
 
-        {update && update.version !== dismissed && (
+        {update && showUpdate && (
           <div className="banner-ok update-banner">
             <span>
               Hay una versión nueva de GitDog: <b>{update.version}</b>.
