@@ -139,12 +139,12 @@ El script pide lo que falte. La contraseña se escribe oculta y no se guarda en 
 Los instaladores no se suben al código del repositorio (`dist/` está en `.gitignore`). Se adjuntan a un **Release** de GitHub, y de ahí los descarga la gente.
 
 1. Sube el número de `version` en `package.json`.
-2. `npm run dist`
+2. `npm run dist:signed` (instalador firmado y notarizado)
 3. Crea el release y adjunta los dos `.dmg`. Con la CLI de GitHub:
 
    ```bash
-   gh release create v0.1.0 dist/GitDog-0.1.0-arm64.dmg dist/GitDog-0.1.0-x64.dmg \
-     --title "GitDog 0.1.0" --notes "Primera versión"
+   gh release create v1.0.2 dist/GitDog-1.0.2-arm64.dmg dist/GitDog-1.0.2-x64.dmg \
+     --title "GitDog 1.0.2" --generate-notes
    ```
 
    También puedes hacerlo desde la web: **Releases** → **Draft a new release** → arrastra los dos archivos.
