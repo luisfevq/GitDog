@@ -16,10 +16,13 @@
 - **Varias cuentas**: el botón con el icono `⇄` (arriba a la derecha) cambia de cuenta o agrega otra.
 - **Proyectos por cuenta**: agrega carpetas locales o clona repositorios de la cuenta activa.
 - **Cada proyecto usa su cuenta**: push, pull y clone usan solo el token de esa cuenta. Los commits salen con su nombre y correo.
-- **Día a día**: cambios, diff, commit, push, pull, ramas e historial.
-- **Ramas**: al cambiar de rama con cambios pendientes, pregunta si los dejas o los llevas. Al crear una rama, pregunta si sale de la actual o de `main`.
+- **Día a día**: cambios, diff, commit, push y pull, con una barra de progreso mientras sube o baja.
+- **Historial**: lista de commits con autor, fecha y etiquetas, marca lo pendiente de subir y muestra los archivos y el diff de cada commit.
+- **Ramas**: lista con la fecha del último commit y buscador. Una rama nueva se publica con **Publicar rama**, y se puede fusionar otra rama en la actual.
+- **Cambios pendientes**: al cambiar de rama con cambios, pregunta si los dejas o los llevas. Al crear una rama, pregunta si sale de la actual o de `main`.
 - **Tags**: crear (simples o anotados), subir, eliminar.
-- **Pull requests**: ver la lista, los archivos con su diff y la conversación. Crear PRs, dejar revisiones (aprobar, comentar, solicitar cambios) y fusionar.
+- **Pull requests**: ver la lista, los archivos con su diff y la conversación. Crear PRs, dejar revisiones (aprobar, comentar, solicitar cambios) y fusionar. Si la rama ya tiene un PR abierto, un push lo actualiza y la barra muestra **PR #n** en vez de ofrecer crear otro.
+- **Versiones nuevas**: al abrir, GitDog busca el último Release del repositorio y avisa si hay una versión más reciente.
 - **Publicar**: convierte una carpeta local en un repositorio nuevo de la cuenta activa.
 
 ## Descargar e instalar (sin código)

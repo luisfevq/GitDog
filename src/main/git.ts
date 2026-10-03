@@ -1,7 +1,16 @@
-import { execFile } from 'child_process'
+import { execFile, spawn } from 'child_process'
 import { chmodSync, realpathSync, writeFileSync } from 'fs'
 import { join } from 'path'
-import type { CommitInfo, FileChange, RepoStatus, TagInfo } from '../shared/types'
+import type {
+  BranchInfo,
+  CommitDetail,
+  CommitFile,
+  CommitInfo,
+  FileChange,
+  GitProgress,
+  RepoStatus,
+  TagInfo
+} from '../shared/types'
 
 /** Credentials of the account that owns a project. Passed per command, never written to disk. */
 export interface Auth {
@@ -41,7 +50,7 @@ export function initGit(userDataDir: string): void {
   chmodSync(askpassPath, 0o700)
 }
 
-export function git(cwd: string, args: string[], options: RunOptions = {}): Promise<RunResult> {
+function build(args: string[], options: RunOptions): { fullArgs: string[]; env: NodeJS.ProcessEnv } {
   const fullArgs = ['-c', 'core.quotepath=false']
   const env: NodeJS.ProcessEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' }
 
@@ -64,7 +73,11 @@ export function git(cwd: string, args: string[], options: RunOptions = {}): Prom
     env.GITDOG_TOKEN = options.auth.token
   }
   fullArgs.push(...args)
+  return { fullArgs, env }
+}
 
+export function git(cwd: string, args: string[], options: RunOptions = {}): Promise<RunResult> {
+  const { fullArgs, env } = build(args, options)
   const okCodes = options.okCodes ?? [0]
   const secret = options.auth?.token
 
@@ -84,6 +97,60 @@ export function git(cwd: string, args: string[], options: RunOptions = {}): Prom
         reject(new Error(message))
       }
     )
+  })
+}
+
+type Progress = Pick<GitProgress, 'phase' | 'percent'>
+
+const PROGRESS_RE =
+  /(Enumerating objects|Counting objects|Compressing objects|Writing objects|Receiving objects|Resolving deltas|Checking connectivity)[^:]*:\s*(?:(\d+)%)?/
+
+function parseProgress(line: string): Progress | null {
+  const m = line.match(PROGRESS_RE)
+  return m ? { phase: m[1], percent: m[2] ? Number(m[2]) : null } : null
+}
+
+/** Like git(), but reports the progress lines that git writes while it sends or receives data. */
+export function gitProgress(
+  cwd: string,
+  args: string[],
+  options: RunOptions,
+  onProgress: (progress: Progress) => void
+): Promise<RunResult> {
+  const { fullArgs, env } = build(args, options)
+  const okCodes = options.okCodes ?? [0]
+  const secret = options.auth?.token
+
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', fullArgs, { cwd, env })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString()
+    })
+    child.stderr.on('data', (chunk: Buffer) => {
+      const text = chunk.toString()
+      stderr += text
+      // Git rewrites the same line with \r while it works.
+      for (const line of text.split(/[\r\n]+/)) {
+        const progress = parseProgress(line)
+        if (progress) onProgress(progress)
+      }
+    })
+    child.on('error', (error) => reject(error))
+    child.on('close', (code) => {
+      if (okCodes.includes(code ?? -1)) {
+        resolve({ stdout, stderr, code: code ?? 0 })
+        return
+      }
+      let message = stderr
+        .split(/[\r\n]+/)
+        .filter((line) => line && !PROGRESS_RE.test(line))
+        .join('\n')
+        .trim()
+      if (secret) message = message.split(secret).join('***')
+      reject(new Error(message || 'Error desconocido de git'))
+    })
   })
 }
 
@@ -142,6 +209,7 @@ export async function status(cwd: string): Promise<RepoStatus> {
   return {
     ...branchInfo,
     hasCommits: head.code === 0,
+    headHash: head.code === 0 ? head.stdout.trim() : null,
     hasRemote: remote.stdout.trim().length > 0,
     remoteUrl: remote.stdout.trim() || null,
     savedChanges,
@@ -185,36 +253,110 @@ export async function commit(cwd: string, message: string, identity: Auth): Prom
   await git(cwd, ['commit', '-m', message], { identity })
 }
 
-export async function push(cwd: string, auth: Auth): Promise<string> {
-  const { stdout, stderr } = await git(cwd, ['push', '--set-upstream', 'origin', 'HEAD'], { auth })
+export async function push(cwd: string, auth: Auth, onProgress: (p: Progress) => void = () => undefined): Promise<string> {
+  const { stdout, stderr } = await gitProgress(cwd, ['push', '--progress', '--set-upstream', 'origin', 'HEAD'], { auth }, onProgress)
   return (stderr || stdout).trim()
 }
 
-export async function pull(cwd: string, auth: Auth): Promise<string> {
-  const { stdout, stderr } = await git(cwd, ['pull', '--ff-only'], { auth })
+export async function pull(cwd: string, auth: Auth, onProgress: (p: Progress) => void = () => undefined): Promise<string> {
+  const { stdout, stderr } = await gitProgress(cwd, ['pull', '--ff-only', '--progress'], { auth }, onProgress)
   return (stdout || stderr).trim()
 }
 
-export async function branches(cwd: string): Promise<string[]> {
-  const { stdout } = await git(cwd, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'])
-  return stdout.split('\n').filter(Boolean)
+export async function branches(cwd: string): Promise<BranchInfo[]> {
+  const { stdout } = await git(cwd, [
+    'for-each-ref',
+    '--sort=-committerdate',
+    '--format=%(refname:short)%1f%(committerdate:iso-strict)',
+    'refs/heads'
+  ])
+  return stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [name, date] = line.split('\x1f')
+      return { name, date }
+    })
 }
 
 export async function checkout(cwd: string, branch: string, create: boolean): Promise<void> {
   await git(cwd, create ? ['checkout', '-b', branch] : ['checkout', branch])
 }
 
-export async function log(cwd: string): Promise<CommitInfo[]> {
-  const { stdout } = await git(cwd, ['log', '-n', '100', '--format=%H%x1f%an%x1f%cI%x1f%s'], {
-    okCodes: [0, 128]
-  })
+/** "HEAD -> main, tag: v1, origin/main" -> ["main", "tag: v1"]. A remote branch shows only when it has no local twin. */
+function parseRefs(decoration: string): string[] {
+  const names = decoration
+    .split(', ')
+    .map((r) => r.replace(/^HEAD -> /, '').trim())
+    .filter((r) => r && r !== 'HEAD' && !r.endsWith('/HEAD'))
+  const local = new Set(names.filter((r) => !r.startsWith('tag: ') && !r.startsWith('origin/')))
+  return names.filter((r) => !(r.startsWith('origin/') && local.has(r.slice('origin/'.length))))
+}
+
+export async function log(cwd: string, hasRemote: boolean): Promise<CommitInfo[]> {
+  const [{ stdout }, pending] = await Promise.all([
+    git(cwd, ['log', '-n', '100', '--format=%H%x1f%an%x1f%ae%x1f%aI%x1f%D%x1f%s'], { okCodes: [0, 128] }),
+    hasRemote
+      ? git(cwd, ['rev-list', '-n', '100', 'HEAD', '--not', '--remotes=origin'], { okCodes: [0, 128] })
+      : Promise.resolve({ stdout: '' })
+  ])
+  const unpushed = new Set(pending.stdout.split('\n').filter(Boolean))
   return stdout
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      const [hash, author, date, subject] = line.split('\x1f')
-      return { hash, author, date, subject }
+      const [hash, author, email, date, decoration, subject] = line.split('\x1f')
+      return { hash, author, email, date, subject, refs: parseRefs(decoration ?? ''), unpushed: unpushed.has(hash) }
     })
+}
+
+/** Files of one commit. For merge commits, the diff is against the first parent. */
+export async function commitDetail(cwd: string, hash: string): Promise<CommitDetail> {
+  const [names, body] = await Promise.all([
+    git(cwd, ['show', '-m', '--first-parent', '-M', '--name-status', '--format=', hash]),
+    git(cwd, ['show', '-s', '--format=%b', hash])
+  ])
+  const files: CommitFile[] = names.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [code, first, second] = line.split('\t')
+      const status = code[0]
+      return status === 'R' || status === 'C' ? { status, orig: first, path: second } : { status, path: first }
+    })
+  return { body: body.stdout.trim(), files }
+}
+
+export async function commitDiff(cwd: string, hash: string, file: CommitFile): Promise<string> {
+  const paths = file.orig ? [file.orig, file.path] : [file.path]
+  const { stdout } = await git(cwd, ['show', '-m', '--first-parent', '-M', '--format=', hash, '--', ...paths])
+  return stdout.length > MAX_DIFF_CHARS ? `${stdout.slice(0, MAX_DIFF_CHARS)}\n\n… diff demasiado grande, recortado.` : stdout
+}
+
+/** Commits that `branch` has and the current branch does not. */
+export async function mergePreview(cwd: string, branch: string): Promise<number> {
+  const { stdout } = await git(cwd, ['rev-list', '--count', `HEAD..refs/heads/${branch}`])
+  return Number(stdout.trim()) || 0
+}
+
+/** Merges a local branch into the current one. On conflicts the merge is cancelled and the files are listed. */
+export async function mergeBranch(cwd: string, branch: string, identity: Auth): Promise<string> {
+  try {
+    const { stdout } = await git(cwd, ['merge', '--no-edit', branch], { identity })
+    return stdout.trim()
+  } catch (error) {
+    const merging = (await git(cwd, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { okCodes: [0, 1, 128] })).code === 0
+    if (!merging) throw error
+    const conflicted = (await git(cwd, ['diff', '--name-only', '--diff-filter=U'], { okCodes: [0, 128] })).stdout
+      .split('\n')
+      .filter(Boolean)
+    await git(cwd, ['merge', '--abort'], { okCodes: [0, 128] })
+    const shown = conflicted.slice(0, 5).join(', ')
+    throw new Error(
+      `Hay conflictos al fusionar ${branch}${shown ? ` (${shown}${conflicted.length > 5 ? ', …' : ''})` : ''}. ` +
+        'La fusión se canceló y tus archivos quedaron como estaban. Resuelve los conflictos con otra herramienta.'
+    )
+  }
 }
 
 /** True only when `path` is the root of a repo, not a folder inside one. */
@@ -241,8 +383,14 @@ export async function addRemote(cwd: string, url: string): Promise<void> {
   await git(cwd, ['remote', 'add', 'origin', url])
 }
 
-export async function clone(parentDir: string, url: string, name: string, auth: Auth): Promise<void> {
-  await git(parentDir, ['clone', url, name], { auth })
+export async function clone(
+  parentDir: string,
+  url: string,
+  name: string,
+  auth: Auth,
+  onProgress: (p: Progress) => void = () => undefined
+): Promise<void> {
+  await gitProgress(parentDir, ['clone', '--progress', url, name], { auth }, onProgress)
 }
 
 export async function tags(cwd: string, auth: Auth): Promise<TagInfo[]> {

@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Repo, Snapshot } from '@shared/types'
+import { useGitProgress } from '../lib/useGitProgress'
 import { LockIcon } from './Icons'
 import { Modal } from './Modal'
+import { ProgressBar } from './ProgressBar'
 import { useToast } from './Toast'
 
 interface Props {
@@ -19,6 +21,7 @@ export function CloneModal({ login, onClose, onDone }: Props): JSX.Element {
   const [picked, setPicked] = useState<Repo | null>(null)
   const [dir, setDir] = useState<string>(() => localStorage.getItem(DIR_KEY) ?? '')
   const [busy, setBusy] = useState(false)
+  const progress = useGitProgress('clone', busy)
 
   useEffect(() => {
     let cancelled = false
@@ -98,6 +101,7 @@ export function CloneModal({ login, onClose, onDone }: Props): JSX.Element {
           </button>
         ))}
       </div>
+      {busy && <ProgressBar progress={progress} fallback="Clonando…" />}
       <div className="dest-row">
         <span className="dest-path" title={dir}>
           {dir ? `${dir}/${picked?.name ?? ''}` : 'Elige dónde guardar el proyecto'}

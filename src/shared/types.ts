@@ -49,16 +49,57 @@ export interface RepoStatus {
   hasRemote: boolean
   remoteUrl: string | null
   tagCount: number
+  headHash: string | null
   /** Stash ref (stash@{n}) of changes left on this branch with "leave my changes" */
   savedChanges: string | null
   files: FileChange[]
 }
 
+export interface BranchInfo {
+  name: string
+  /** ISO date of the last commit */
+  date: string
+}
+
 export interface CommitInfo {
   hash: string
   author: string
+  email: string
+  /** ISO date */
   date: string
   subject: string
+  /** Branches and tags on this commit. Tags start with "tag: ". */
+  refs: string[]
+  /** Not on the remote yet */
+  unpushed: boolean
+}
+
+export interface CommitFile {
+  path: string
+  orig?: string
+  /** M, A, D, R, C */
+  status: string
+}
+
+export interface CommitDetail {
+  body: string
+  files: CommitFile[]
+}
+
+/** Progress of a push, pull or clone, sent by the main process while git works. */
+export interface GitProgress {
+  /** Project id, or "clone" while cloning */
+  projectId: string
+  /** Git's own phase name, for example "Writing objects" */
+  phase: string
+  /** null when git did not report a percentage yet */
+  percent: number | null
+}
+
+export interface UpdateInfo {
+  version: string
+  url: string
+  name: string
 }
 
 export interface TagInfo {
@@ -183,13 +224,21 @@ export interface Api {
   commit(id: string, message: string): Promise<void>
   push(id: string): Promise<string>
   pull(id: string): Promise<string>
-  branches(id: string): Promise<string[]>
+  branches(id: string): Promise<BranchInfo[]>
   /** leaveChanges: stash local changes on the current branch first instead of carrying them over */
   switchBranch(id: string, branch: string, leaveChanges: boolean): Promise<void>
   /** base: branch to start from, or null for the current commit */
   createBranch(id: string, name: string, base: string | null, leaveChanges: boolean): Promise<void>
   restoreChanges(id: string, ref: string): Promise<void>
   log(id: string): Promise<CommitInfo[]>
+  commitDetail(id: string, hash: string): Promise<CommitDetail>
+  commitDiff(id: string, hash: string, file: CommitFile): Promise<string>
+  /** How many commits `branch` has that the current branch does not */
+  mergePreview(id: string, branch: string): Promise<number>
+  mergeBranch(id: string, branch: string): Promise<string>
+  /** Open pull request whose head is this branch, or null */
+  branchPull(id: string, branch: string): Promise<PullRequest | null>
+  checkUpdate(): Promise<UpdateInfo | null>
 
   tags(id: string): Promise<TagInfo[]>
   createTag(id: string, name: string, message: string, push: boolean): Promise<void>
@@ -240,6 +289,12 @@ export const API_METHODS: (keyof Api)[] = [
   'createBranch',
   'restoreChanges',
   'log',
+  'commitDetail',
+  'commitDiff',
+  'mergePreview',
+  'mergeBranch',
+  'branchPull',
+  'checkUpdate',
   'tags',
   'createTag',
   'pushTag',

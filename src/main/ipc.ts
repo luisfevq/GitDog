@@ -1,4 +1,4 @@
-import { BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { basename, join } from 'path'
@@ -9,6 +9,7 @@ import * as git from './git'
 import type { Auth } from './git'
 import * as github from './github'
 import * as oauth from './oauth'
+import { checkForUpdate } from './update'
 import { deleteToken, getConfig, getToken, saveConfig, setToken } from './store'
 
 const snapshot = (): Snapshot => {
@@ -122,7 +123,20 @@ function requireActive(): string {
 
 let login: { start: oauth.DeviceStart; controller: AbortController } | null = null
 
+const hex = /^[0-9a-f]{7,40}$/
+
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
+  /** Sends git's progress to the window, at most about 15 times a second. */
+  const progressSender = (projectId: string): ((p: { phase: string; percent: number | null }) => void) => {
+    let last = 0
+    return (p) => {
+      const now = Date.now()
+      if (now - last < 60) return
+      last = now
+      getWindow()?.webContents.send('git:progress', { projectId, ...p })
+    }
+  }
+
   const impl: Api = {
     getState: async () => snapshot(),
 
@@ -210,7 +224,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const auth = authFor(accountByLogin(login))
       const dest = join(parentDir, name)
       if (existsSync(dest)) throw new Error(`Ya existe una carpeta llamada "${name}" en ese lugar.`)
-      await git.clone(parentDir, cloneUrl, name, auth)
+      await git.clone(parentDir, cloneUrl, name, auth, progressSender('clone'))
       await addProject(dest, login)
       return snapshot()
     },
@@ -222,7 +236,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       if (!current.hasCommits) throw new Error('Haz al menos un commit antes de publicar.')
       const repo = await github.createRepo(auth.token, options)
       await git.addRemote(project.path, repo.cloneUrl)
-      await git.push(project.path, auth)
+      await git.push(project.path, auth, progressSender(id))
       project.remoteUrl = repo.cloneUrl
       saveConfig()
       return snapshot()
@@ -250,12 +264,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
     push(id) {
       const { project, auth } = context(id)
-      return git.push(project.path, auth)
+      return git.push(project.path, auth, progressSender(id))
     },
 
     pull(id) {
       const { project, auth } = context(id)
-      return git.pull(project.path, auth)
+      return git.pull(project.path, auth, progressSender(id))
     },
 
     branches: (id) => git.branches(context(id).project.path),
@@ -278,7 +292,50 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       if (!/^stash@\{\d+\}$/.test(ref)) throw new Error('Referencia no válida.')
       await git.stashPop(project.path, ref)
     },
-    log: (id) => git.log(context(id).project.path),
+    async log(id) {
+      const { project } = context(id)
+      return git.log(project.path, !!(await git.remoteUrl(project.path)))
+    },
+
+    commitDetail(id, hash) {
+      if (!hex.test(hash)) throw new Error('Commit no válido.')
+      return git.commitDetail(context(id).project.path, hash)
+    },
+
+    commitDiff(id, hash, file) {
+      if (!hex.test(hash)) throw new Error('Commit no válido.')
+      return git.commitDiff(context(id).project.path, hash, file)
+    },
+
+    mergePreview: (id, branch) => git.mergePreview(context(id).project.path, branch),
+
+    async mergeBranch(id, branch) {
+      const { project, auth } = context(id)
+      const current = await git.status(project.path)
+      if (current.branch === branch) throw new Error('No puedes fusionar una rama en sí misma.')
+      const count = await git.mergePreview(project.path, branch)
+      if (count === 0) return `${current.branch} ya tiene todo lo de ${branch}.`
+      await git.mergeBranch(project.path, branch, auth)
+      return `${branch} fusionada en ${current.branch} (${count} ${count === 1 ? 'commit' : 'commits'}).`
+    },
+
+    async branchPull(id, branch) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      return github.fetchBranchPull(auth.token, owner, repo, branch)
+    },
+
+    async checkUpdate() {
+      const tokens: string[] = []
+      for (const account of getConfig().accounts) {
+        try {
+          tokens.push(getToken(account.login))
+        } catch {
+          /* account without a stored token */
+        }
+      }
+      return checkForUpdate(app.getVersion(), tokens)
+    },
 
     tags(id) {
       const { project, auth } = context(id)

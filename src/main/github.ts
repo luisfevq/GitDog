@@ -334,3 +334,15 @@ export async function deleteBranch(token: string, owner: string, repo: string, b
   const ref = branch.split('/').map(encodeURIComponent).join('/')
   await request(token, `${repoPath(owner, repo)}/git/refs/heads/${ref}`, { method: 'DELETE' })
 }
+
+/** Open pull request whose head is `branch` in the same repository, or null. */
+export async function fetchBranchPull(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string
+): Promise<PullRequest | null> {
+  const head = encodeURIComponent(`${owner}:${branch}`)
+  const list = await request<ApiPull[]>(token, `${repoPath(owner, repo)}/pulls?state=open&head=${head}&per_page=1`)
+  return list[0] ? toPull(list[0]) : null
+}

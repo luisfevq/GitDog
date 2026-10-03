@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import type { BranchInfo } from '@shared/types'
+import { timeAgo } from '../lib/time'
 import { Modal } from './Modal'
 
 interface ChoiceProps {
@@ -152,6 +154,80 @@ export function NewBranchModal({ current, baseBranch, dirty, onClose, onConfirm 
           <ChangesChoice leave={leave} setLeave={setLeave} current={current} target={clean || 'la nueva rama'} />
         </>
       )}
+    </Modal>
+  )
+}
+
+interface MergeProps {
+  projectId: string
+  current: string
+  /** Branches that can be merged: every local branch except the current one */
+  branches: BranchInfo[]
+  onClose: () => void
+  onConfirm: (branch: string) => void
+}
+
+export function MergeBranchModal({ projectId, current, branches, onClose, onConfirm }: MergeProps): JSX.Element {
+  const [query, setQuery] = useState('')
+  const [picked, setPicked] = useState<string | null>(null)
+  const [count, setCount] = useState<number | null>(null)
+
+  useEffect(() => {
+    setCount(null)
+    if (!picked) return
+    let cancelled = false
+    window.api
+      .mergePreview(projectId, picked)
+      .then((n) => !cancelled && setCount(n))
+      .catch(() => !cancelled && setCount(null))
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, picked])
+
+  const q = query.trim().toLowerCase()
+  const shown = branches.filter((b) => b.name.toLowerCase().includes(q))
+
+  return (
+    <Modal
+      title={`Fusionar una rama en ${current}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>
+            Cancelar
+          </button>
+          <button className="btn primary" disabled={!picked || !count} onClick={() => picked && onConfirm(picked)}>
+            {count ? `Fusionar ${count} ${count === 1 ? 'commit' : 'commits'}` : 'Fusionar'}
+          </button>
+        </>
+      }
+    >
+      <input className="search" autoFocus placeholder="Buscar rama…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <div className="repo-list short">
+        {shown.length === 0 && <div className="empty-inline">Sin resultados.</div>}
+        {shown.map((b) => (
+          <button key={b.name} className={`repo-row ${picked === b.name ? 'active' : ''}`} onClick={() => setPicked(b.name)}>
+            <span className="repo-name">{b.name}</span>
+            <span className="repo-desc">Último commit {timeAgo(b.date)}</span>
+          </button>
+        ))}
+      </div>
+      {picked && count !== null && (
+        <p className={count === 0 ? 'hint' : 'muted'}>
+          {count === 0 ? (
+            <>
+              <b>{current}</b> ya tiene todo lo de <b>{picked}</b>.
+            </>
+          ) : (
+            <>
+              <b>{picked}</b> tiene {count} {count === 1 ? 'commit' : 'commits'} que <b>{current}</b> no tiene. Se fusionarán en{' '}
+              <b>{current}</b>.
+            </>
+          )}
+        </p>
+      )}
+      <p className="hint">Si hay conflictos, la fusión se cancela y tus archivos quedan como estaban.</p>
     </Modal>
   )
 }

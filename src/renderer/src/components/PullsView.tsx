@@ -11,17 +11,19 @@ interface Props {
   isGitHub: boolean
   /** The open PR count may have changed (review or merge). */
   onChanged: () => void
+  /** Pull request to show first */
+  initialSelected?: number | null
 }
 
 type Filter = 'open' | 'closed' | 'all'
 
-export function PullsView({ project, login, hasRemote, isGitHub, onChanged }: Props): JSX.Element {
+export function PullsView({ project, login, hasRemote, isGitHub, onChanged, initialSelected }: Props): JSX.Element {
   const id = project.id
 
   const [filter, setFilter] = useState<Filter>('open')
   const [pulls, setPulls] = useState<PullRequest[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [selected, setSelected] = useState<number | null>(null)
+  const [selected, setSelected] = useState<number | null>(initialSelected ?? null)
 
   const load = useCallback(async (): Promise<void> => {
     setError(null)

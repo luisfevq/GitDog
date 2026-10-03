@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { githubWebUrl } from '@shared/github-url'
-import type { Project, Snapshot } from '@shared/types'
+import type { Project, Snapshot, UpdateInfo } from '@shared/types'
 import { AccountMenu } from './components/AccountMenu'
 import { AddAccountModal } from './components/AddAccountModal'
 import { CloneModal } from './components/CloneModal'
@@ -25,6 +25,40 @@ function Workspace(): JSX.Element {
   const [state, setState] = useState<Snapshot | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [dialog, setDialog] = useState<Dialog>(null)
+  const [update, setUpdate] = useState<UpdateInfo | null>(null)
+  const [dismissed, setDismissed] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('gitdog.dismissedUpdate')
+    } catch {
+      return null
+    }
+  })
+
+  // Look for a new release when GitDog opens, and every 6 hours after that.
+  useEffect(() => {
+    let alive = true
+    const check = (): void => {
+      window.api
+        .checkUpdate()
+        .then((found) => alive && setUpdate(found))
+        .catch(() => undefined)
+    }
+    check()
+    const timer = setInterval(check, 6 * 60 * 60 * 1000)
+    return () => {
+      alive = false
+      clearInterval(timer)
+    }
+  }, [])
+
+  const dismissUpdate = (version: string): void => {
+    setDismissed(version)
+    try {
+      localStorage.setItem('gitdog.dismissedUpdate', version)
+    } catch {
+      /* the notice just comes back next time */
+    }
+  }
 
   useEffect(() => {
     window.api
@@ -108,6 +142,20 @@ function Workspace(): JSX.Element {
             onRemove={(login) => setDialog({ kind: 'removeAccount', login })}
           />
         </header>
+
+        {update && update.version !== dismissed && (
+          <div className="banner-ok update-banner">
+            <span>
+              Hay una versión nueva de GitDog: <b>{update.version}</b>.
+            </span>
+            <button className="btn small primary" onClick={() => window.api.openExternal(update.url).catch(fail)}>
+              Descargar
+            </button>
+            <button className="icon-btn" aria-label="Cerrar aviso" onClick={() => dismissUpdate(update.version)}>
+              ×
+            </button>
+          </div>
+        )}
 
         <section className="content">
           {state === null ? null : !account ? (
