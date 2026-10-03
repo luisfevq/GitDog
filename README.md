@@ -18,10 +18,10 @@
 - **Cada proyecto usa su cuenta**: push, pull y clone usan solo el token de esa cuenta. Los commits salen con su nombre y correo.
 - **Día a día**: cambios, diff, commit, push y pull, con una barra de progreso mientras sube o baja.
 - **Historial**: lista de commits con autor, fecha y etiquetas, marca lo pendiente de subir y muestra los archivos y el diff de cada commit.
-- **Ramas**: lista con la fecha del último commit y buscador. Una rama nueva se publica con **Publicar rama**, y se puede fusionar otra rama en la actual.
+- **Ramas**: lista con la fecha del último commit y buscador. Una rama nueva se publica con **Publicar rama**, y se puede hacer merge de otra rama en la actual.
 - **Cambios pendientes**: al cambiar de rama con cambios, pregunta si los dejas o los llevas. Al crear una rama, pregunta si sale de la actual o de `main`.
 - **Tags**: crear (simples o anotados), subir, eliminar.
-- **Pull requests**: ver la lista, los archivos con su diff y la conversación. Crear PRs, dejar revisiones (aprobar, comentar, solicitar cambios) y fusionar. Si la rama ya tiene un PR abierto, un push lo actualiza y la barra muestra **PR #n** en vez de ofrecer crear otro.
+- **Pull requests**: ver la lista, los archivos con su diff y la conversación. Crear PRs, dejar revisiones (aprobar, comentar, solicitar cambios) y hacer merge. Si la rama ya tiene un PR abierto, un push lo actualiza y la barra muestra **PR #n** en vez de ofrecer crear otro.
 - **Versiones nuevas**: al abrir, GitDog busca el último Release del repositorio y avisa si hay una versión más reciente.
 - **Publicar**: convierte una carpeta local en un repositorio nuevo de la cuenta activa.
 
@@ -78,7 +78,7 @@ Con eso aparece el botón **Iniciar sesión con GitHub**. Se crea en GitHub → 
 
 ### Qué permite el permiso `repo`
 
-Clone, pull, push, crear repos, ramas, tags, pull requests (crear, revisar, fusionar) e issues.
+Clone, pull, push, crear repos, ramas, tags, pull requests (crear, revisar, hacer merge) e issues.
 No permite cambiar archivos de `.github/workflows/` (hace falta el permiso `workflow`), ni borrar repositorios, ni administrar organizaciones.
 En organizaciones con SAML SSO, autoriza el token para esa organización desde la lista de tokens de GitHub (**Configure SSO**).
 

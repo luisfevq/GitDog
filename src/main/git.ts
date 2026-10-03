@@ -204,14 +204,21 @@ export async function status(cwd: string): Promise<RepoStatus> {
   }
 
   const branchInfo = parseBranchHeader(header.replace(/^## /, ''))
-  const savedChanges = branchInfo.branch ? await savedChangesRef(cwd, branchInfo.branch) : null
+  const hasRemote = remote.stdout.trim().length > 0
+  const [savedChanges, unpushed] = await Promise.all([
+    branchInfo.branch ? savedChangesRef(cwd, branchInfo.branch) : Promise.resolve(null),
+    hasRemote && head.code === 0
+      ? git(cwd, ['rev-list', '--count', 'HEAD', '--not', '--remotes=origin'], { okCodes: [0, 128] })
+      : Promise.resolve({ stdout: '0' })
+  ])
 
   return {
     ...branchInfo,
     hasCommits: head.code === 0,
     headHash: head.code === 0 ? head.stdout.trim() : null,
-    hasRemote: remote.stdout.trim().length > 0,
+    hasRemote,
     remoteUrl: remote.stdout.trim() || null,
+    unpushed: Number(unpushed.stdout.trim()) || 0,
     savedChanges,
     tagCount: tagList.stdout.split('\n').filter(Boolean).length,
     files
@@ -353,8 +360,8 @@ export async function mergeBranch(cwd: string, branch: string, identity: Auth): 
     await git(cwd, ['merge', '--abort'], { okCodes: [0, 128] })
     const shown = conflicted.slice(0, 5).join(', ')
     throw new Error(
-      `Hay conflictos al fusionar ${branch}${shown ? ` (${shown}${conflicted.length > 5 ? ', …' : ''})` : ''}. ` +
-        'La fusión se canceló y tus archivos quedaron como estaban. Resuelve los conflictos con otra herramienta.'
+      `Hay conflictos al hacer merge de ${branch}${shown ? ` (${shown}${conflicted.length > 5 ? ', …' : ''})` : ''}. ` +
+        'El merge se canceló y tus archivos quedaron como estaban. Resuelve los conflictos con otra herramienta.'
     )
   }
 }

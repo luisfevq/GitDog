@@ -50,6 +50,8 @@ export interface RepoStatus {
   remoteUrl: string | null
   tagCount: number
   headHash: string | null
+  /** Commits of this branch that are not on GitHub yet */
+  unpushed: number
   /** Stash ref (stash@{n}) of changes left on this branch with "leave my changes" */
   savedChanges: string | null
   files: FileChange[]
@@ -146,6 +148,21 @@ export interface PullDetail extends PullRequest {
   mergeMethods: MergeMethod[]
   /** Branch lives in the same repo (not a fork), so it can be deleted after merge */
   sameRepo: boolean
+  /** GraphQL id and head commit, needed to merge with a chosen email */
+  nodeId: string
+  headSha: string
+}
+
+export interface MergeEmail {
+  email: string
+  label: string
+  kind: 'private' | 'primary' | 'verified'
+}
+
+export interface MergeEmails {
+  options: MergeEmail[]
+  /** The token cannot list the account's verified emails (it lacks the user:email permission) */
+  limited: boolean
 }
 
 export interface PullFile {
@@ -254,7 +271,9 @@ export interface Api {
   pullFiles(id: string, number: number): Promise<PullFile[]>
   pullConversation(id: string, number: number): Promise<PullEvent[]>
   reviewPull(id: string, number: number, event: ReviewEvent, body: string): Promise<void>
-  mergePull(id: string, number: number, method: MergeMethod, deleteBranch: boolean): Promise<string>
+  /** email: address for the merge commit, or null to let GitHub use the account default */
+  mergePull(id: string, number: number, method: MergeMethod, deleteBranch: boolean, email: string | null): Promise<string>
+  mergeEmails(id: string): Promise<MergeEmails>
 
   openExternal(url: string): Promise<void>
   revealInFinder(path: string): Promise<void>
@@ -309,6 +328,7 @@ export const API_METHODS: (keyof Api)[] = [
   'pullConversation',
   'reviewPull',
   'mergePull',
+  'mergeEmails',
   'openExternal',
   'revealInFinder'
 ]

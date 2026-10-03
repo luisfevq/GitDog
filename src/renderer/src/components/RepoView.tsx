@@ -355,7 +355,12 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
           Cambios {files.length > 0 && <span className="pill">{files.length}</span>}
         </button>
         <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>
-          Historial
+          Historial{' '}
+          {status.unpushed > 0 && (
+            <span className="pill accent" title={`${status.unpushed} ${status.unpushed === 1 ? 'commit pendiente' : 'commits pendientes'} de subir`}>
+              {status.unpushed}
+            </span>
+          )}
         </button>
         <button className={tab === 'tags' ? 'on' : ''} onClick={() => setTab('tags')}>
           Tags {status.tagCount > 0 && <span className="pill">{status.tagCount}</span>}

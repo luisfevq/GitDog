@@ -94,7 +94,7 @@ export function BranchMenu({ current, branches, baseBranch, onSwitch, onCreate, 
           >
             <BranchIcon size={14} />
             <span>
-              Fusionar una rama en <b>{current ?? 'HEAD'}</b>…
+              Merge de otra rama en <b>{current ?? 'HEAD'}</b>…
             </span>
           </button>
         </div>

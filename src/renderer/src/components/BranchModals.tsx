@@ -190,7 +190,7 @@ export function MergeBranchModal({ projectId, current, branches, onClose, onConf
 
   return (
     <Modal
-      title={`Fusionar una rama en ${current}`}
+      title={`Merge de una rama en ${current}`}
       onClose={onClose}
       footer={
         <>
@@ -198,7 +198,7 @@ export function MergeBranchModal({ projectId, current, branches, onClose, onConf
             Cancelar
           </button>
           <button className="btn primary" disabled={!picked || !count} onClick={() => picked && onConfirm(picked)}>
-            {count ? `Fusionar ${count} ${count === 1 ? 'commit' : 'commits'}` : 'Fusionar'}
+            {count ? `Hacer merge de ${count} ${count === 1 ? 'commit' : 'commits'}` : 'Hacer merge'}
           </button>
         </>
       }
@@ -221,13 +221,13 @@ export function MergeBranchModal({ projectId, current, branches, onClose, onConf
             </>
           ) : (
             <>
-              <b>{picked}</b> tiene {count} {count === 1 ? 'commit' : 'commits'} que <b>{current}</b> no tiene. Se fusionarán en{' '}
+              <b>{picked}</b> tiene {count} {count === 1 ? 'commit' : 'commits'} que <b>{current}</b> no tiene. Se hará merge en{' '}
               <b>{current}</b>.
             </>
           )}
         </p>
       )}
-      <p className="hint">Si hay conflictos, la fusión se cancela y tus archivos quedan como estaban.</p>
+      <p className="hint">Si hay conflictos, el merge se cancela y tus archivos quedan como estaban.</p>
     </Modal>
   )
 }

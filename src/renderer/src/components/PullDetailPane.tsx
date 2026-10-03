@@ -17,7 +17,7 @@ interface Props {
 
 type Section = 'summary' | 'files' | 'conversation'
 
-const STATE_LABEL = { open: 'Abierto', closed: 'Cerrado', merged: 'Fusionado' } as const
+const STATE_LABEL = { open: 'Abierto', closed: 'Cerrado', merged: 'Merged' } as const
 const FILE_BADGE: Record<string, string> = { added: 'A', removed: 'D', modified: 'M', renamed: 'R', copied: 'C', changed: 'M' }
 const REVIEW_LABEL: Record<string, string> = {
   APPROVED: 'Aprobó',
@@ -194,7 +194,7 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
             Revisar
           </button>
           <button className="btn primary" disabled={!detail} onClick={() => setMerging(true)}>
-            Fusionar…
+            Merge…
           </button>
         </div>
       )}

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import type { MergeMethod, PullDetail } from '@shared/types'
+import { useEffect, useState } from 'react'
+import type { MergeEmails, MergeMethod, PullDetail } from '@shared/types'
 import { Modal } from './Modal'
 import { useToast } from './Toast'
 
@@ -20,7 +20,7 @@ const METHODS: Record<MergeMethod, { title: string; text: string }> = {
 function warning(pull: PullDetail): string | null {
   switch (pull.mergeableState) {
     case 'dirty':
-      return 'Hay conflictos con la rama destino. Resuélvelos antes de fusionar.'
+      return 'Hay conflictos con la rama destino. Resuélvelos antes de hacer merge.'
     case 'blocked':
       return 'GitHub indica reglas pendientes, por ejemplo revisiones obligatorias o checks. Si no tienes permiso, GitHub rechazará el merge.'
     case 'behind':
@@ -37,16 +37,45 @@ export function MergeModal({ projectId, pull, onClose, onDone }: Props): JSX.Ele
   const [method, setMethod] = useState<MergeMethod>(pull.mergeMethods[0] ?? 'merge')
   const [deleteBranch, setDeleteBranch] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [emails, setEmails] = useState<MergeEmails | null>(null)
+  // "default" lets GitHub choose. Otherwise the address of the merge commit.
+  const [emailChoice, setEmailChoice] = useState<string>(() => {
+    try {
+      return localStorage.getItem(`gitdog.mergeEmail.${projectId}`) ?? 'private'
+    } catch {
+      return 'private'
+    }
+  })
+
+  useEffect(() => {
+    window.api
+      .mergeEmails(projectId)
+      .then(setEmails)
+      .catch(() => setEmails({ options: [], limited: true }))
+  }, [projectId])
+
+  // The saved choice may point to an address that is gone. Fall back to the private one.
+  const chosen =
+    emailChoice === 'default'
+      ? null
+      : (emails?.options.find((o) => o.email === emailChoice || (emailChoice === 'private' && o.kind === 'private')) ?? null)
+  // Rebase keeps each commit's own author, so the email only matters for merge and squash.
+  const emailForMerge = method === 'rebase' || !emails ? null : (chosen?.email ?? null)
 
   const canDelete = pull.sameRepo && pull.head !== pull.base
   const blocked = pull.draft || pull.mergeableState === 'dirty'
-  const note = pull.draft ? 'Es un borrador. Márcalo como listo en GitHub antes de fusionar.' : warning(pull)
+  const note = pull.draft ? 'Es un borrador. Márcalo como listo en GitHub antes de hacer merge.' : warning(pull)
 
   const merge = async (): Promise<void> => {
     if (busy || blocked) return
     setBusy(true)
     try {
-      toast(await window.api.mergePull(projectId, pull.number, method, canDelete && deleteBranch))
+      try {
+        localStorage.setItem(`gitdog.mergeEmail.${projectId}`, emailChoice)
+      } catch {
+        /* the choice is just not remembered */
+      }
+      toast(await window.api.mergePull(projectId, pull.number, method, canDelete && deleteBranch, emailForMerge))
       onDone()
     } catch (e) {
       toast((e as Error).message, 'error')
@@ -57,7 +86,7 @@ export function MergeModal({ projectId, pull, onClose, onDone }: Props): JSX.Ele
 
   return (
     <Modal
-      title={`Fusionar #${pull.number}`}
+      title={`Merge del PR #${pull.number}`}
       onClose={onClose}
       footer={
         <>
@@ -65,13 +94,13 @@ export function MergeModal({ projectId, pull, onClose, onDone }: Props): JSX.Ele
             Cancelar
           </button>
           <button className="btn primary" disabled={busy || blocked} onClick={merge}>
-            {busy ? 'Fusionando…' : `Fusionar con ${METHODS[method].title}`}
+            {busy ? 'Haciendo merge…' : `Hacer merge (${METHODS[method].title})`}
           </button>
         </>
       }
     >
       <p className="muted">
-        <b>{pull.head}</b> se fusionará en <b>{pull.base}</b>. Esto es visible para tu equipo y no se puede deshacer desde
+        Se hará merge de <b>{pull.head}</b> en <b>{pull.base}</b>. Esto es visible para tu equipo y no se puede deshacer desde
         GitDog.
       </p>
       {note && <div className={blocked ? 'banner' : 'banner-warn'}>{note}</div>}
@@ -87,6 +116,39 @@ export function MergeModal({ projectId, pull, onClose, onDone }: Props): JSX.Ele
           </label>
         ))}
       </div>
+
+      {method !== 'rebase' && (
+        <div className="email-choice">
+          <div className="field-label">Correo del commit de merge</div>
+          {!emails && <p className="hint">Buscando tus correos…</p>}
+          {emails && (
+            <div className="options">
+              {emails.options.map((o) => {
+                const on = chosen?.email === o.email
+                return (
+                  <label key={o.email} className={`option ${on ? 'on' : ''}`}>
+                    <input type="radio" name="email" checked={on} onChange={() => setEmailChoice(o.kind === 'private' ? 'private' : o.email)} />
+                    <span>
+                      <b>{o.label}</b>
+                      <small>{o.email}</small>
+                    </span>
+                  </label>
+                )
+              })}
+              <label className={`option ${emailForMerge === null ? 'on' : ''}`}>
+                <input type="radio" name="email" checked={emailForMerge === null} onChange={() => setEmailChoice('default')} />
+                <span>
+                  <b>El predeterminado de GitHub</b>
+                  <small>GitHub usa el correo principal de tu cuenta. Puede ser el del trabajo.</small>
+                </span>
+              </label>
+            </div>
+          )}
+          {emails?.limited && (
+            <p className="hint">Para elegir entre más correos, el token necesita el permiso user:email.</p>
+          )}
+        </div>
+      )}
 
       {canDelete && (
         <label className="check-row">

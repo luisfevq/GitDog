@@ -15,7 +15,7 @@ interface Props {
 const OPTIONS: { value: ReviewEvent; title: string; text: string }[] = [
   { value: 'COMMENT', title: 'Comentar', text: 'Deja un comentario sin aprobar ni bloquear.' },
   { value: 'APPROVE', title: 'Aprobar', text: 'Aprueba estos cambios.' },
-  { value: 'REQUEST_CHANGES', title: 'Solicitar cambios', text: 'Pide cambios antes de poder fusionar.' }
+  { value: 'REQUEST_CHANGES', title: 'Solicitar cambios', text: 'Pide cambios antes de poder hacer merge.' }
 ]
 
 const DONE: Record<ReviewEvent, string> = {

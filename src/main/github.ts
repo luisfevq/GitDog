@@ -1,4 +1,13 @@
-import type { MergeMethod, PullDetail, PullEvent, PullFile, PullRequest, Repo, ReviewEvent } from '../shared/types'
+import type {
+  MergeEmail,
+  MergeMethod,
+  PullDetail,
+  PullEvent,
+  PullFile,
+  PullRequest,
+  Repo,
+  ReviewEvent
+} from '../shared/types'
 
 const API = 'https://api.github.com'
 
@@ -112,7 +121,8 @@ interface ApiPull {
   draft?: boolean
   merged_at: string | null
   user: { login: string; avatar_url: string } | null
-  head: { ref: string; repo?: ApiRepoRef | null }
+  node_id?: string
+  head: { ref: string; sha?: string; repo?: ApiRepoRef | null }
   base: { ref: string; repo?: ApiRepoRef | null }
   html_url: string
   created_at: string
@@ -179,7 +189,9 @@ export async function fetchPull(token: string, owner: string, repo: string, numb
     mergeable: p.mergeable,
     mergeableState: p.mergeable_state,
     mergeMethods,
-    sameRepo: !!p.head.repo && !!target && p.head.repo.full_name === target.full_name
+    sameRepo: !!p.head.repo && !!target && p.head.repo.full_name === target.full_name,
+    nodeId: p.node_id ?? '',
+    headSha: p.head.sha ?? ''
   }
 }
 
@@ -327,7 +339,7 @@ export async function mergePull(
     method: 'PUT',
     body: JSON.stringify({ merge_method: method })
   })
-  if (!r.merged) throw new Error(r.message || 'GitHub no pudo fusionar el pull request.')
+  if (!r.merged) throw new Error(r.message || 'GitHub no pudo hacer el merge del pull request.')
 }
 
 export async function deleteBranch(token: string, owner: string, repo: string, branch: string): Promise<void> {
@@ -345,4 +357,41 @@ export async function fetchBranchPull(
   const head = encodeURIComponent(`${owner}:${branch}`)
   const list = await request<ApiPull[]>(token, `${repoPath(owner, repo)}/pulls?state=open&head=${head}&per_page=1`)
   return list[0] ? toPull(list[0]) : null
+}
+
+/**
+ * Verified emails of the account. Needs the user:email permission, which a token with only "repo" does not have.
+ * Throws when GitHub refuses.
+ */
+export async function fetchVerifiedEmails(token: string): Promise<{ email: string; primary: boolean }[]> {
+  const list = await request<{ email: string; primary: boolean; verified: boolean }[]>(token, '/user/emails')
+  return list.filter((e) => e.verified).map((e) => ({ email: e.email, primary: e.primary }))
+}
+
+/**
+ * Merge with a chosen email for the merge commit. The REST merge endpoint cannot do this, GraphQL can.
+ * The email must be verified on the account, or be its private @users.noreply.github.com address.
+ */
+export async function mergePullWithEmail(
+  token: string,
+  pull: { nodeId: string; headSha: string },
+  method: MergeMethod,
+  email: string
+): Promise<void> {
+  const res = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'User-Agent': 'GitDog' },
+    body: JSON.stringify({
+      query: `mutation($id: ID!, $method: PullRequestMergeMethod!, $email: String, $oid: GitObjectID) {
+        mergePullRequest(input: { pullRequestId: $id, mergeMethod: $method, authorEmail: $email, expectedHeadOid: $oid }) {
+          pullRequest { merged }
+        }
+      }`,
+      variables: { id: pull.nodeId, method: method.toUpperCase(), email, oid: pull.headSha || null }
+    })
+  })
+  const body = (await res.json().catch(() => ({}))) as { errors?: { message: string }[]; message?: string }
+  if (!res.ok || body.errors?.length) {
+    throw new Error(`GitHub: ${body.errors?.[0]?.message ?? body.message ?? `respondió ${res.status}`}`)
+  }
 }

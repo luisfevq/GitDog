@@ -1943,3 +1943,30 @@ select:focus {
 .update-banner {
   flex-shrink: 0;
 }
+
+/* ---------- Selected file in a commit, merge email ---------- */
+
+.cfiles .file.active {
+  background: rgba(10, 132, 255, 0.28);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.cfiles .file.active .file-dir {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.field-label {
+  color: var(--text-2);
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.email-choice {
+  display: flex;
+  flex-direction: column;
+}
+
+.pill.accent {
+  background: var(--accent);
+  color: #fff;
+}

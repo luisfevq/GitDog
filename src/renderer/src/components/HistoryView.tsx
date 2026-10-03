@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Account, CommitDetail, CommitFile, CommitInfo } from '@shared/types'
 import { timeAgo } from '../lib/time'
-import { Avatar } from './Avatar'
+import { Avatar, isAccountEmail } from './Avatar'
 import { DiffView } from './DiffView'
 import { ArrowUpIcon } from './Icons'
 import { useToast } from './Toast'
@@ -87,6 +87,10 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
 
   const pending = commits.filter((c) => c.unpushed).length
 
+  // A merge made on GitHub's website uses another email, but it has the same author name as your own commits.
+  const ownNames = new Set(commits.filter((c) => isAccountEmail(c.email, account)).map((c) => c.author))
+  const mine = (c: CommitInfo): boolean => ownNames.has(c.author)
+
   return (
     <div className="split">
       <div className="commit-col">
@@ -102,7 +106,7 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
             <div key={c.hash}>
               {header && <div className="commit-group">{header}</div>}
               <button className={`crow ${current?.hash === c.hash ? 'active' : ''}`} onClick={() => setSelected(c.hash)}>
-                <Avatar name={c.author} email={c.email} account={account} />
+                <Avatar name={c.author} email={c.email} account={account} own={mine(c)} />
                 <span className="crow-main">
                   <span className="crow-subject">{c.subject}</span>
                   <span className="crow-meta">
@@ -130,7 +134,7 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
           <div className="commit-head">
             <h3>{current.subject}</h3>
             <div className="commit-head-meta">
-              <Avatar name={current.author} email={current.email} account={account} size={20} />
+              <Avatar name={current.author} email={current.email} account={account} own={mine(current)} size={20} />
               <b>{current.author}</b>
               <span>{timeAgo(current.date)}</span>
               <code>{current.hash.slice(0, 7)}</code>

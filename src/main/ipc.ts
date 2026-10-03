@@ -3,7 +3,7 @@ import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { basename, join } from 'path'
 import { githubRepoRef } from '../shared/github-url'
-import type { Account, Api, MergeMethod, PrDraft, Project, ReviewEvent, Snapshot } from '../shared/types'
+import type { Account, Api, MergeEmail, MergeMethod, PrDraft, Project, ReviewEvent, Snapshot } from '../shared/types'
 import { API_METHODS } from '../shared/types'
 import * as git from './git'
 import type { Auth } from './git'
@@ -312,11 +312,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async mergeBranch(id, branch) {
       const { project, auth } = context(id)
       const current = await git.status(project.path)
-      if (current.branch === branch) throw new Error('No puedes fusionar una rama en sí misma.')
+      if (current.branch === branch) throw new Error('No puedes hacer merge de una rama en sí misma.')
       const count = await git.mergePreview(project.path, branch)
       if (count === 0) return `${current.branch} ya tiene todo lo de ${branch}.`
       await git.mergeBranch(project.path, branch, auth)
-      return `${branch} fusionada en ${current.branch} (${count} ${count === 1 ? 'commit' : 'commits'}).`
+      return `Merge de ${branch} en ${current.branch} completado (${count} ${count === 1 ? 'commit' : 'commits'}).`
     },
 
     async branchPull(id, branch) {
@@ -444,7 +444,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       await github.submitReview(auth.token, owner, repo, checkPullNumber(number), event, body.trim())
     },
 
-    async mergePull(id, number, method, deleteBranch) {
+    async mergePull(id, number, method, deleteBranch, email) {
       const { project, auth } = context(id)
       const { owner, repo } = repoRef(project)
       const methods: MergeMethod[] = ['merge', 'squash', 'rebase']
@@ -453,9 +453,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
       const pr = await github.fetchPull(auth.token, owner, repo, n)
       if (pr.state !== 'open') throw new Error('Este pull request ya no está abierto.')
-      if (pr.draft) throw new Error('Es un borrador. Márcalo como listo en GitHub antes de fusionar.')
+      if (pr.draft) throw new Error('Es un borrador. Márcalo como listo en GitHub antes de hacer merge.')
 
-      await github.mergePull(auth.token, owner, repo, n, method)
+      if (email) {
+        if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw new Error('Correo no válido.')
+        await github.mergePullWithEmail(auth.token, pr, method, email)
+      } else {
+        await github.mergePull(auth.token, owner, repo, n, method)
+      }
 
       let note = ''
       if (deleteBranch && pr.sameRepo && pr.head !== pr.base) {
@@ -465,7 +470,29 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           note = ` No se pudo borrar la rama: ${(e as Error).message}`
         }
       }
-      return `Pull request #${n} fusionado.${note}`
+      return `Merge del pull request #${n} completado.${note}`
+    },
+
+    async mergeEmails(id) {
+      const { project, auth } = context(id)
+      const account = accountByLogin(project.accountLogin)
+      const options: MergeEmail[] = [
+        {
+          email: `${account.id}+${account.login}@users.noreply.github.com`,
+          label: 'Correo privado de GitHub',
+          kind: 'private'
+        }
+      ]
+      let limited = false
+      try {
+        for (const e of await github.fetchVerifiedEmails(auth.token)) {
+          if (e.email.endsWith('@users.noreply.github.com') || options.some((o) => o.email === e.email)) continue
+          options.push({ email: e.email, label: e.primary ? 'Correo principal' : 'Correo verificado', kind: e.primary ? 'primary' : 'verified' })
+        }
+      } catch {
+        limited = true
+      }
+      return { options, limited }
     },
 
     async openExternal(url) {
