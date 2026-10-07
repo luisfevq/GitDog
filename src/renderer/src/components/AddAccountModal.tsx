@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { DeviceCode, Snapshot } from '@shared/types'
+import { useI18n } from '../i18n'
 import { Modal } from './Modal'
 import { useToast } from './Toast'
 
@@ -11,6 +12,7 @@ interface Props {
 const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=repo&description=GitDog'
 
 export function AddAccountModal({ onClose, onDone }: Props): JSX.Element {
+  const { t, tr } = useI18n()
   const toast = useToast()
   const [oauth, setOauth] = useState<boolean | null>(null)
   const [manual, setManual] = useState(false)
@@ -39,7 +41,7 @@ export function AddAccountModal({ onClose, onDone }: Props): JSX.Element {
   }
 
   const finish = (state: Snapshot): void => {
-    toast(`Cuenta ${state.activeAccount} conectada`)
+    toast(t('login.connected', { login: state.activeAccount ?? '' }))
     onDone(state)
   }
 
@@ -76,58 +78,56 @@ export function AddAccountModal({ onClose, onDone }: Props): JSX.Element {
 
   return (
     <Modal
-      title="Conectar cuenta de GitHub"
+      title={t('login.title')}
       onClose={close}
       footer={
         manual ? (
           <>
             <button className="btn" onClick={close}>
-              Cancelar
+              {t('common.cancel')}
             </button>
             <button className="btn primary" disabled={!token.trim() || busy} onClick={tokenLogin}>
-              {busy ? 'Conectando…' : 'Conectar'}
+              {busy ? t('login.connecting') : t('login.connect')}
             </button>
           </>
         ) : (
           <button className="btn" onClick={close}>
-            Cancelar
+            {t('common.cancel')}
           </button>
         )
       }
     >
-      {oauth === null && <p className="muted">Cargando…</p>}
+      {oauth === null && <p className="muted">{t('common.loading')}</p>}
 
       {oauth && !manual && !code && (
         <>
-          <p className="muted">
-            Se abrirá GitHub en tu navegador. Asegúrate de estar ahí con la cuenta que quieres agregar.
-          </p>
+          <p className="muted">{t('login.browserIntro')}</p>
           <button className="btn primary big wide-btn" disabled={busy} onClick={browserLogin}>
-            Iniciar sesión con GitHub
+            {t('login.withGithub')}
           </button>
           <button className="text-link" onClick={() => setManual(true)}>
-            Prefiero usar un token
+            {t('login.useToken')}
           </button>
         </>
       )}
 
       {code && (
         <div className="device">
-          <p className="muted">Pega este código en GitHub para autorizar a GitDog. Ya lo copié por ti.</p>
+          <p className="muted">{t('login.codeIntro')}</p>
           <div className="device-code">{code.userCode}</div>
           <div className="row center">
             <button className="btn" onClick={() => void navigator.clipboard.writeText(code.userCode)}>
-              Copiar de nuevo
+              {t('login.copyAgain')}
             </button>
             <button className="btn" onClick={() => window.api.openExternal(code.verificationUri)}>
-              Abrir GitHub
+              {t('login.openGithub')}
             </button>
           </div>
           <p className="hint waiting">
-            <span className="spinner" /> Esperando autorización…
+            <span className="spinner" /> {t('login.waiting')}
           </p>
           <button className="text-link" onClick={stopWaiting}>
-            Cancelar este intento
+            {t('login.cancelAttempt')}
           </button>
         </div>
       )}
@@ -135,42 +135,16 @@ export function AddAccountModal({ onClose, onDone }: Props): JSX.Element {
       {manual && (
         <>
           <ol className="steps">
-            <li>
-              Abre <b>github.com</b> en el navegador y entra con la cuenta que quieres agregar.
-            </li>
-            <li>
-              Arriba a la derecha pulsa tu <b>foto de perfil</b> y elige <b>Settings</b>.
-            </li>
-            <li>
-              En la barra izquierda, baja hasta el final y pulsa <b>Developer settings</b>.
-            </li>
-            <li>
-              Pulsa <b>Personal access tokens</b> y luego <b>Tokens (classic)</b>.
-            </li>
-            <li>
-              Pulsa <b>Generate new token</b> (arriba a la derecha) y elige <b>Generate new token (classic)</b>. GitHub puede
-              pedirte la contraseña o el código 2FA.
-            </li>
-            <li>
-              En <b>Note</b> escribe <code>GitDog</code>. En <b>Expiration</b> elige <b>No expiration</b>. Marca la casilla{' '}
-              <code>repo</code>.
-            </li>
-            <li>
-              Baja hasta el final y pulsa <b>Generate token</b>.
-            </li>
-            <li>
-              Copia el texto que empieza con <code>ghp_</code>. GitHub lo muestra solo una vez. Pégalo en el campo de abajo.
-            </li>
+            {(['login.step1', 'login.step2', 'login.step3', 'login.step4', 'login.step5', 'login.step6', 'login.step7', 'login.step8'] as const).map((key) => (
+              <li key={key}>{tr(key)}</li>
+            ))}
           </ol>
           <button className="btn" onClick={() => window.api.openExternal(TOKEN_URL)}>
-            Atajo: abrir la página del paso 6
+            {t('login.shortcut')}
           </button>
-          <p className="hint">
-            El atajo salta los pasos 2 a 5 y deja <code>GitDog</code> y <code>repo</code> ya puestos. Revisa que sigues con la
-            cuenta correcta.
-          </p>
+          <p className="hint">{tr('login.shortcutHint')}</p>
           <label className="field">
-            <span>Token</span>
+            <span>{t('login.token')}</span>
             <input
               type="password"
               autoFocus
@@ -180,10 +154,10 @@ export function AddAccountModal({ onClose, onDone }: Props): JSX.Element {
               onKeyDown={(e) => e.key === 'Enter' && tokenLogin()}
             />
           </label>
-          <p className="hint">El token se guarda cifrado en el Keychain de este Mac. No sale de aquí.</p>
+          <p className="hint">{t('login.tokenHint')}</p>
           {oauth && (
             <button className="text-link" onClick={() => setManual(false)}>
-              Volver al inicio de sesión con GitHub
+              {t('login.backToGithub')}
             </button>
           )}
         </>

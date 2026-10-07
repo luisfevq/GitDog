@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { BranchInfo } from '@shared/types'
+import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
 import { Modal } from './Modal'
 
@@ -12,24 +13,21 @@ interface ChoiceProps {
 
 /** What to do with local changes when the branch changes. */
 function ChangesChoice({ leave, setLeave, current, target }: ChoiceProps): JSX.Element {
+  const { t, tr } = useI18n()
   return (
     <div className="options">
       <label className={`option ${leave ? 'on' : ''}`}>
         <input type="radio" name="changes" checked={leave} onChange={() => setLeave(true)} />
         <span>
-          <b>
-            Dejar mis cambios en <code>{current}</code>
-          </b>
-          <small>Se guardan aparte. Podrás restaurarlos cuando vuelvas a esa rama.</small>
+          <b>{tr('br.leave', { current })}</b>
+          <small>{t('br.leaveHint')}</small>
         </span>
       </label>
       <label className={`option ${!leave ? 'on' : ''}`}>
         <input type="radio" name="changes" checked={!leave} onChange={() => setLeave(false)} />
         <span>
-          <b>
-            Llevar mis cambios a <code>{target}</code>
-          </b>
-          <small>Los cambios te siguen a la otra rama. Si chocan con ella, Git lo avisará.</small>
+          <b>{tr('br.carry', { target })}</b>
+          <small>{t('br.carryHint')}</small>
         </span>
       </label>
     </div>
@@ -45,26 +43,24 @@ interface SwitchProps {
 }
 
 export function SwitchBranchModal({ current, target, changeCount, onClose, onConfirm }: SwitchProps): JSX.Element {
+  const { t, tr } = useI18n()
   const [leave, setLeave] = useState(true)
   return (
     <Modal
-      title={`Cambiar a ${target}`}
+      title={t('br.switchTitle', { target })}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button className="btn primary" onClick={() => onConfirm(leave)}>
-            Cambiar de rama
+            {t('br.switchButton')}
           </button>
         </>
       }
     >
-      <p className="muted">
-        Tienes {changeCount} {changeCount === 1 ? 'archivo' : 'archivos'} con cambios sin commit en <b>{current}</b>. ¿Qué
-        quieres hacer con ellos?
-      </p>
+      <p className="muted">{tr('br.switchBody', { n: changeCount, current })}</p>
       <ChangesChoice leave={leave} setLeave={setLeave} current={current} target={target} />
     </Modal>
   )
@@ -80,6 +76,7 @@ interface NewProps {
 }
 
 export function NewBranchModal({ current, baseBranch, dirty, onClose, onConfirm }: NewProps): JSX.Element {
+  const { t, tr } = useI18n()
   const [name, setName] = useState('')
   const [fromMain, setFromMain] = useState(false)
   const [leave, setLeave] = useState(true)
@@ -96,24 +93,24 @@ export function NewBranchModal({ current, baseBranch, dirty, onClose, onConfirm 
 
   return (
     <Modal
-      title="Nueva rama"
+      title={t('br.newTitle')}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button className="btn primary" disabled={!clean} onClick={submit}>
-            Crear rama
+            {t('br.create')}
           </button>
         </>
       }
     >
       <label className="field">
-        <span>Nombre</span>
+        <span>{t('br.name')}</span>
         <input
           autoFocus
-          placeholder="feature/mi-cambio"
+          placeholder={t('br.namePlaceholder')}
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && submit()}
@@ -124,34 +121,24 @@ export function NewBranchModal({ current, baseBranch, dirty, onClose, onConfirm 
         <label className={`option ${!useMain ? 'on' : ''}`}>
           <input type="radio" name="base" checked={!useMain} onChange={() => setFromMain(false)} />
           <span>
-            <b>
-              Desde mi rama actual (<code>{current}</code>)
-            </b>
-            <small>Incluye los commits de esta rama.</small>
+            <b>{tr('br.fromCurrent', { current })}</b>
+            <small>{t('br.fromCurrentHint')}</small>
           </span>
         </label>
         <label className={`option ${useMain ? 'on' : ''} ${canPickMain ? '' : 'off'}`}>
           <input type="radio" name="base" disabled={!canPickMain} checked={useMain} onChange={() => setFromMain(true)} />
           <span>
-            <b>
-              Desde <code>{baseBranch ?? 'main'}</code>
-            </b>
-            <small>
-              {canPickMain
-                ? 'Empieza limpia, sin los commits de tu rama actual.'
-                : baseBranch
-                  ? 'Ya estás en esa rama.'
-                  : 'No se encontró la rama principal.'}
-            </small>
+            <b>{tr('br.fromBase', { base: baseBranch ?? 'main' })}</b>
+            <small>{canPickMain ? t('br.fromBaseHint') : baseBranch ? t('br.alreadyThere') : t('br.noBase')}</small>
           </span>
         </label>
       </div>
 
-      {dirty && !useMain && <p className="hint">Tus cambios sin commit se llevan a la nueva rama.</p>}
+      {dirty && !useMain && <p className="hint">{t('br.carriedHint')}</p>}
       {askChanges && (
         <>
-          <p className="muted">Tienes cambios sin commit. ¿Qué quieres hacer con ellos?</p>
-          <ChangesChoice leave={leave} setLeave={setLeave} current={current} target={clean || 'la nueva rama'} />
+          <p className="muted">{t('br.askChanges')}</p>
+          <ChangesChoice leave={leave} setLeave={setLeave} current={current} target={clean || t('br.newBranchLabel')} />
         </>
       )}
     </Modal>
@@ -168,6 +155,7 @@ interface MergeProps {
 }
 
 export function MergeBranchModal({ projectId, current, branches, onClose, onConfirm }: MergeProps): JSX.Element {
+  const { t, tr } = useI18n()
   const [query, setQuery] = useState('')
   const [picked, setPicked] = useState<string | null>(null)
   const [count, setCount] = useState<number | null>(null)
@@ -190,44 +178,35 @@ export function MergeBranchModal({ projectId, current, branches, onClose, onConf
 
   return (
     <Modal
-      title={`Merge de una rama en ${current}`}
+      title={t('br.mergeTitle', { current })}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button className="btn primary" disabled={!picked || !count} onClick={() => picked && onConfirm(picked)}>
-            {count ? `Hacer merge de ${count} ${count === 1 ? 'commit' : 'commits'}` : 'Hacer merge'}
+            {count ? t('br.mergeButtonN', { n: count }) : t('br.mergeButton')}
           </button>
         </>
       }
     >
-      <input className="search" autoFocus placeholder="Buscar rama…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <input className="search" autoFocus placeholder={t('br.search')} value={query} onChange={(e) => setQuery(e.target.value)} />
       <div className="repo-list short">
-        {shown.length === 0 && <div className="empty-inline">Sin resultados.</div>}
+        {shown.length === 0 && <div className="empty-inline">{t('common.noResults')}</div>}
         {shown.map((b) => (
           <button key={b.name} className={`repo-row ${picked === b.name ? 'active' : ''}`} onClick={() => setPicked(b.name)}>
             <span className="repo-name">{b.name}</span>
-            <span className="repo-desc">Último commit {timeAgo(b.date)}</span>
+            <span className="repo-desc">{t('br.lastCommit', { time: timeAgo(b.date) })}</span>
           </button>
         ))}
       </div>
       {picked && count !== null && (
         <p className={count === 0 ? 'hint' : 'muted'}>
-          {count === 0 ? (
-            <>
-              <b>{current}</b> ya tiene todo lo de <b>{picked}</b>.
-            </>
-          ) : (
-            <>
-              <b>{picked}</b> tiene {count} {count === 1 ? 'commit' : 'commits'} que <b>{current}</b> no tiene. Se hará merge en{' '}
-              <b>{current}</b>.
-            </>
-          )}
+          {count === 0 ? tr('br.mergeUpToDate', { current, picked }) : tr('br.mergeCount', { picked, current, n: count })}
         </p>
       )}
-      <p className="hint">Si hay conflictos, el merge se cancela y tus archivos quedan como estaban.</p>
+      <p className="hint">{t('br.mergeConflictHint')}</p>
     </Modal>
   )
 }

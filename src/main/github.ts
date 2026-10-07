@@ -8,6 +8,7 @@ import type {
   Repo,
   ReviewEvent
 } from '../shared/types'
+import { t } from './lang'
 
 const API = 'https://api.github.com'
 
@@ -31,7 +32,7 @@ async function request<T>(token: string, path: string, init: RequestInit = {}): 
     }
   })
   if (!res.ok) {
-    if (res.status === 401) throw new Error('Token inválido o expirado.')
+    if (res.status === 401) throw new Error(t('err.tokenInvalid'))
     let detail = ''
     try {
       const body = (await res.json()) as { message?: string; errors?: { message?: string }[] }
@@ -40,9 +41,9 @@ async function request<T>(token: string, path: string, init: RequestInit = {}): 
       /* no JSON body */
     }
     if (res.status === 403 || res.status === 404) {
-      detail ||= 'Sin permisos. Revisa que el token tenga el permiso "repo".'
+      detail ||= t('err.noPermission')
     }
-    throw new Error(`GitHub respondió ${res.status}${detail ? `: ${detail}` : ''}`)
+    throw new Error(t('err.githubStatus', { status: res.status, detail: detail ? `: ${detail}` : '' }))
   }
   if (res.status === 204) return undefined as T
   return (await res.json()) as T
@@ -339,7 +340,7 @@ export async function mergePull(
     method: 'PUT',
     body: JSON.stringify({ merge_method: method })
   })
-  if (!r.merged) throw new Error(r.message || 'GitHub no pudo hacer el merge del pull request.')
+  if (!r.merged) throw new Error(r.message || t('err.githubMergeFailed'))
 }
 
 export async function deleteBranch(token: string, owner: string, repo: string, branch: string): Promise<void> {
@@ -392,6 +393,6 @@ export async function mergePullWithEmail(
   })
   const body = (await res.json().catch(() => ({}))) as { errors?: { message: string }[]; message?: string }
   if (!res.ok || body.errors?.length) {
-    throw new Error(`GitHub: ${body.errors?.[0]?.message ?? body.message ?? `respondió ${res.status}`}`)
+    throw new Error(`GitHub: ${body.errors?.[0]?.message ?? body.message ?? t('err.githubReplied', { status: res.status })}`)
   }
 }

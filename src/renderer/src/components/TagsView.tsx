@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Project, TagInfo } from '@shared/types'
 import { githubWebUrl } from '@shared/github-url'
+import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
 import { ExternalIcon, UploadIcon } from './Icons'
 import { Modal } from './Modal'
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged }: Props): JSX.Element {
+  const { t } = useI18n()
   const toast = useToast()
   const id = project.id
   const web = githubWebUrl(remoteUrl)
@@ -61,7 +63,7 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
   const create = async (): Promise<void> => {
     const tag = name.trim()
     if (!tag) return
-    const done = await run(() => window.api.createTag(id, tag, message, push && hasRemote), `Tag ${tag} creado`)
+    const done = await run(() => window.api.createTag(id, tag, message, push && hasRemote), t('tg.created', { name: tag }))
     if (done) {
       setName('')
       setMessage('')
@@ -73,76 +75,76 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
       <div className="tag-form">
         <div className="tag-form-row">
           <input
-            placeholder="Nombre del tag, por ejemplo v1.0.0"
+            placeholder={t('tg.namePlaceholder')}
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void create()}
           />
           <button className="btn primary" disabled={!name.trim() || busy || !hasCommits} onClick={create}>
-            Crear tag
+            {t('tg.create')}
           </button>
         </div>
         <input
-          placeholder="Mensaje (opcional). Con mensaje se crea un tag anotado."
+          placeholder={t('tg.messagePlaceholder')}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
         <div className="tag-form-foot">
           <label className="check-row">
             <input type="checkbox" checked={push && hasRemote} disabled={!hasRemote} onChange={(e) => setPush(e.target.checked)} />
-            <span>Subir a GitHub al crearlo</span>
+            <span>{t('tg.pushOnCreate')}</span>
           </label>
-          <span className="hint">El tag se crea en el último commit de la rama actual.</span>
+          <span className="hint">{t('tg.at')}</span>
         </div>
-        {!hasCommits && <p className="hint">Haz un commit antes de crear un tag.</p>}
-        {hasCommits && !hasRemote && <p className="hint">Publica el proyecto para poder subir tags a GitHub.</p>}
+        {!hasCommits && <p className="hint">{t('tg.needCommit')}</p>}
+        {hasCommits && !hasRemote && <p className="hint">{t('tg.needRemote')}</p>}
       </div>
 
       {error && <div className="banner">{error}</div>}
 
       <div className="tag-list">
-        {tags === null && <div className="empty-inline">Leyendo tags…</div>}
-        {tags?.length === 0 && <div className="empty-inline">Este proyecto aún no tiene tags.</div>}
-        {tags?.map((t) => (
-          <div key={t.name} className="tag-row">
+        {tags === null && <div className="empty-inline">{t('tg.loading')}</div>}
+        {tags?.length === 0 && <div className="empty-inline">{t('tg.empty')}</div>}
+        {tags?.map((tg) => (
+          <div key={tg.name} className="tag-row">
             <div className="tag-main">
               <div className="tag-name">
-                {t.name}
-                {t.onRemote === true && <span className="chip ok">En GitHub</span>}
-                {t.onRemote === false && <span className="chip warn">Solo local</span>}
-                {t.annotated && <span className="chip">Anotado</span>}
+                {tg.name}
+                {tg.onRemote === true && <span className="chip ok">{t('tg.onGithub')}</span>}
+                {tg.onRemote === false && <span className="chip warn">{t('tg.localOnly')}</span>}
+                {tg.annotated && <span className="chip">{t('tg.annotated')}</span>}
               </div>
               <div className="tag-meta">
-                <code>{t.hash}</code> · {timeAgo(t.date)}
-                {t.subject && ` · ${t.subject}`}
+                <code>{tg.hash}</code> · {timeAgo(tg.date)}
+                {tg.subject && ` · ${tg.subject}`}
               </div>
             </div>
-            {t.onRemote === true && web && (
+            {tg.onRemote === true && web && (
               <button
                 className="icon-btn"
-                title="Ver release en GitHub"
-                onClick={() => window.api.openExternal(`${web}/releases/tag/${encodeURIComponent(t.name)}`).catch((e: Error) => toast(e.message, 'error'))}
+                title={t('tg.viewRelease')}
+                onClick={() => window.api.openExternal(`${web}/releases/tag/${encodeURIComponent(tg.name)}`).catch((e: Error) => toast(e.message, 'error'))}
               >
                 <ExternalIcon size={15} />
               </button>
             )}
-            {t.onRemote === false && (
+            {tg.onRemote === false && (
               <button
                 className="btn small"
                 disabled={busy}
-                onClick={() => void run(() => window.api.pushTag(id, t.name), `Tag ${t.name} subido`)}
+                onClick={() => void run(() => window.api.pushTag(id, tg.name), t('tg.pushed', { name: tg.name }))}
               >
-                <UploadIcon size={13} /> Subir
+                <UploadIcon size={13} /> {t('tg.push')}
               </button>
             )}
             <button
               className="link-danger"
               onClick={() => {
                 setAlsoRemote(false)
-                setDeleting(t)
+                setDeleting(tg)
               }}
             >
-              Eliminar
+              {t('tg.delete')}
             </button>
           </div>
         ))}
@@ -150,12 +152,12 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
 
       {deleting && (
         <Modal
-          title={`Eliminar el tag ${deleting.name}`}
+          title={t('tg.deleteTitle', { name: deleting.name })}
           onClose={() => setDeleting(null)}
           footer={
             <>
               <button className="btn" onClick={() => setDeleting(null)}>
-                Cancelar
+                {t('common.cancel')}
               </button>
               <button
                 className="btn danger"
@@ -163,19 +165,19 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
                 onClick={async () => {
                   const tag = deleting
                   setDeleting(null)
-                  await run(() => window.api.deleteTag(id, tag.name, alsoRemote && tag.onRemote === true), `Tag ${tag.name} eliminado`)
+                  await run(() => window.api.deleteTag(id, tag.name, alsoRemote && tag.onRemote === true), t('tg.deleted', { name: tag.name }))
                 }}
               >
-                Eliminar
+                {t('tg.delete')}
               </button>
             </>
           }
         >
-          <p className="muted">El tag se borra de esta carpeta. Los commits no se tocan.</p>
+          <p className="muted">{t('tg.deleteBody')}</p>
           {deleting.onRemote === true && (
             <label className="check-row">
               <input type="checkbox" checked={alsoRemote} onChange={(e) => setAlsoRemote(e.target.checked)} />
-              <span>Borrarlo también en GitHub</span>
+              <span>{t('tg.deleteRemote')}</span>
             </label>
           )}
         </Modal>

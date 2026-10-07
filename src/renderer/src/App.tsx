@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { githubWebUrl } from '@shared/github-url'
 import type { Project, Snapshot, UpdateInfo } from '@shared/types'
+import { useI18n } from './i18n'
 import { AccountMenu } from './components/AccountMenu'
 import { AddAccountModal } from './components/AddAccountModal'
 import { CloneModal } from './components/CloneModal'
@@ -24,6 +25,7 @@ const UPDATE_REMINDER_MS = 6 * 60 * 60 * 1000
 const EMPTY: Snapshot = { accounts: [], projects: [], activeAccount: null }
 
 function Workspace(): JSX.Element {
+  const { t, tr } = useI18n()
   const toast = useToast()
   const [state, setState] = useState<Snapshot | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -146,7 +148,7 @@ function Workspace(): JSX.Element {
                 title={repoUrl}
                 onClick={() => window.api.openExternal(repoUrl).catch(fail)}
               >
-                <ExternalIcon size={13} /> Abrir en GitHub
+                <ExternalIcon size={13} /> {t('app.openOnGithub')}
               </button>
             )}
           </div>
@@ -161,13 +163,11 @@ function Workspace(): JSX.Element {
 
         {update && showUpdate && (
           <div className="banner-ok update-banner">
-            <span>
-              Hay una versión nueva de GitDog: <b>{update.version}</b>.
-            </span>
+            <span>{tr('app.updateAvailable', { version: update.version })}</span>
             <button className="btn small primary" onClick={() => window.api.openExternal(update.url).catch(fail)}>
-              Descargar
+              {t('app.download')}
             </button>
-            <button className="icon-btn" aria-label="Cerrar aviso" onClick={() => dismissUpdate(update.version)}>
+            <button className="icon-btn" aria-label={t('app.dismiss')} onClick={() => dismissUpdate(update.version)}>
               ×
             </button>
           </div>
@@ -177,9 +177,9 @@ function Workspace(): JSX.Element {
           {state === null ? null : !account ? (
             <div className="welcome">
               <h1>GitDog</h1>
-              <p>Conecta tus cuentas de GitHub y mueve tus proyectos entre ellas sin confundirte.</p>
+              <p>{t('app.welcomeText')}</p>
               <button className="btn primary big" onClick={() => setDialog({ kind: 'addAccount' })}>
-                Conectar cuenta de GitHub
+                {t('app.connectAccount')}
               </button>
             </div>
           ) : selected ? (
@@ -187,13 +187,13 @@ function Workspace(): JSX.Element {
           ) : (
             <div className="welcome">
               <h1>{account.login}</h1>
-              <p>Agrega una carpeta local o clona un repositorio de esta cuenta.</p>
+              <p>{t('app.emptyAccountText')}</p>
               <div className="row">
                 <button className="btn big" onClick={addLocal}>
-                  Agregar carpeta local
+                  {t('app.addFolder')}
                 </button>
                 <button className="btn primary big" onClick={() => setDialog({ kind: 'clone' })}>
-                  Clonar repositorio
+                  {t('app.cloneRepo')}
                 </button>
               </div>
             </div>
@@ -224,9 +224,9 @@ function Workspace(): JSX.Element {
       )}
       {dialog?.kind === 'initRepo' && (
         <ConfirmModal
-          title="Esta carpeta no es un repositorio"
-          body={`${dialog.path}\n\n¿Quieres inicializar Git aquí? Después podrás hacer commits y publicarla en ${account?.login}.`}
-          confirmLabel="Inicializar Git"
+          title={t('app.initTitle')}
+          body={t('app.initBody', { path: dialog.path, login: account?.login ?? '' })}
+          confirmLabel={t('app.initConfirm')}
           onClose={closeDialog}
           onConfirm={() => {
             const { path } = dialog
@@ -237,9 +237,9 @@ function Workspace(): JSX.Element {
       )}
       {dialog?.kind === 'removeProject' && (
         <ConfirmModal
-          title="Quitar de la lista"
-          body={`"${dialog.project.name}" se quita de GitDog. La carpeta y sus archivos no se borran.`}
-          confirmLabel="Quitar"
+          title={t('app.removeProjectTitle')}
+          body={t('app.removeProjectBody', { name: dialog.project.name })}
+          confirmLabel={t('common.remove')}
           onClose={closeDialog}
           onConfirm={() => {
             const { project } = dialog
@@ -250,9 +250,9 @@ function Workspace(): JSX.Element {
       )}
       {dialog?.kind === 'removeAccount' && (
         <ConfirmModal
-          title={`Quitar la cuenta ${dialog.login}`}
-          body="Se borra el token de este Mac y se quitan sus proyectos de la lista. Las carpetas y los repositorios en GitHub no se tocan."
-          confirmLabel="Quitar cuenta"
+          title={t('app.removeAccountTitle', { login: dialog.login })}
+          body={t('app.removeAccountBody')}
+          confirmLabel={t('app.removeAccountConfirm')}
           onClose={closeDialog}
           onConfirm={() => {
             const { login } = dialog

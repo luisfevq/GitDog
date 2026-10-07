@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
-import { basename, join } from 'path'
+import { basename, join, resolve, sep } from 'path'
 import { githubRepoRef } from '../shared/github-url'
 import type { Account, Api, MergeEmail, MergeMethod, PrDraft, Project, ReviewEvent, Snapshot } from '../shared/types'
 import { API_METHODS } from '../shared/types'
@@ -9,6 +9,8 @@ import * as git from './git'
 import type { Auth } from './git'
 import * as github from './github'
 import * as oauth from './oauth'
+import { LANGS } from '../shared/i18n'
+import { setLang, t } from './lang'
 import { checkForUpdate } from './update'
 import { deleteToken, getConfig, getToken, saveConfig, setToken } from './store'
 
@@ -26,15 +28,15 @@ const authFor = (account: Account): Auth => ({
 
 function accountByLogin(login: string): Account {
   const account = getConfig().accounts.find((a) => a.login === login)
-  if (!account) throw new Error(`La cuenta ${login} no existe.`)
+  if (!account) throw new Error(t('err.noAccount', { login }))
   return account
 }
 
 /** The project and the credentials of the account it belongs to. */
 function context(id: string): { project: Project; auth: Auth } {
   const project = getConfig().projects.find((p) => p.id === id)
-  if (!project) throw new Error('El proyecto ya no existe.')
-  if (!existsSync(project.path)) throw new Error(`La carpeta ya no existe: ${project.path}`)
+  if (!project) throw new Error(t('err.noProject'))
+  if (!existsSync(project.path)) throw new Error(t('err.noFolder', { path: project.path }))
   return { project, auth: authFor(accountByLogin(project.accountLogin)) }
 }
 
@@ -42,7 +44,7 @@ async function addProject(path: string, accountLogin: string): Promise<void> {
   const config = getConfig()
   const duplicate = config.projects.find((p) => p.path === path)
   if (duplicate) {
-    throw new Error(`Esta carpeta ya está en la cuenta ${duplicate.accountLogin}.`)
+    throw new Error(t('err.dupFolder', { login: duplicate.accountLogin }))
   }
   config.projects.push({
     id: randomUUID(),
@@ -74,18 +76,18 @@ async function connectAccount(token: string): Promise<Snapshot> {
 
 function repoRef(project: Project): { owner: string; repo: string } {
   const ref = githubRepoRef(project.remoteUrl)
-  if (!ref) throw new Error('Este proyecto no tiene un remoto de GitHub. Publícalo primero.')
+  if (!ref) throw new Error(t('err.noGithubRemote'))
   return ref
 }
 
 function checkTagName(name: string): void {
   if (!/^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(name) || name.includes('..') || name.endsWith('/') || name.endsWith('.lock')) {
-    throw new Error('Nombre de tag no válido. Usa letras, números, punto, guion o barra. Ejemplo: v1.0.0')
+    throw new Error(t('err.tagName'))
   }
 }
 
 function checkPullNumber(n: number): number {
-  if (!Number.isInteger(n) || n < 1) throw new Error('Número de pull request no válido.')
+  if (!Number.isInteger(n) || n < 1) throw new Error(t('err.prNumber'))
   return n
 }
 
@@ -117,7 +119,7 @@ async function withChangesHandled(cwd: string, leaveChanges: boolean, change: ()
 
 function requireActive(): string {
   const login = getConfig().activeAccount
-  if (!login) throw new Error('Primero conecta una cuenta de GitHub.')
+  if (!login) throw new Error(t('err.connectFirst'))
   return login
 }
 
@@ -156,7 +158,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     },
 
     async finishLogin() {
-      if (!login) throw new Error('Inicia el login primero.')
+      if (!login) throw new Error(t('err.loginFirst'))
       const { start, controller } = login
       try {
         const token = await oauth.pollForToken(start, controller.signal)
@@ -202,9 +204,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
     async addLocalProject(path, initRepo) {
       const login = requireActive()
-      if (!statSync(path).isDirectory()) throw new Error('Elige una carpeta.')
+      if (!statSync(path).isDirectory()) throw new Error(t('err.pickFolder'))
       if (initRepo) await git.init(path)
-      else if (!(await git.isRepo(path))) throw new Error('Esta carpeta no es un repositorio Git.')
+      else if (!(await git.isRepo(path))) throw new Error(t('err.notRepo'))
       await addProject(path, login)
       return snapshot()
     },
@@ -223,7 +225,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async cloneRepo(login, cloneUrl, parentDir, name) {
       const auth = authFor(accountByLogin(login))
       const dest = join(parentDir, name)
-      if (existsSync(dest)) throw new Error(`Ya existe una carpeta llamada "${name}" en ese lugar.`)
+      if (existsSync(dest)) throw new Error(t('err.destExists', { name }))
       await git.clone(parentDir, cloneUrl, name, auth, progressSender('clone'))
       await addProject(dest, login)
       return snapshot()
@@ -231,9 +233,9 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
     async publishProject(id, options) {
       const { project, auth } = context(id)
-      if (await git.remoteUrl(project.path)) throw new Error('Este proyecto ya tiene un remoto.')
+      if (await git.remoteUrl(project.path)) throw new Error(t('err.hasRemote'))
       const current = await git.status(project.path)
-      if (!current.hasCommits) throw new Error('Haz al menos un commit antes de publicar.')
+      if (!current.hasCommits) throw new Error(t('err.commitFirstPublish'))
       const repo = await github.createRepo(auth.token, options)
       await git.addRemote(project.path, repo.cloneUrl)
       await git.push(project.path, auth, progressSender(id))
@@ -258,7 +260,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
     async commit(id, message) {
       const { project, auth } = context(id)
-      if (!message.trim()) throw new Error('Escribe un mensaje de commit.')
+      if (!message.trim()) throw new Error(t('err.commitMessage'))
       await git.commit(project.path, message.trim(), auth)
     },
 
@@ -272,6 +274,35 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return git.pull(project.path, auth, progressSender(id))
     },
 
+    async fetch(id) {
+      const { project, auth } = context(id)
+      await git.fetchRemote(project.path, auth, progressSender(id))
+    },
+
+    async discardChanges(id, files) {
+      const { project } = context(id)
+      if (!files.length) throw new Error(t('err.noFilesToDiscard'))
+      for (const file of files) {
+        // Never touch anything outside the project folder.
+        const inside = (p: string): boolean => {
+          const full = resolve(project.path, p)
+          return full === project.path || full.startsWith(`${project.path}${sep}`)
+        }
+        if (!inside(file.path) || (file.orig && !inside(file.orig))) throw new Error(t('err.badPattern'))
+      }
+      await git.discardFiles(project.path, files, (absolute) => shell.trashItem(absolute))
+    },
+
+    async ignorePattern(id, pattern) {
+      git.ignorePattern(context(id).project.path, pattern)
+    },
+
+    undoCommit: (id) => git.undoLastCommit(context(id).project.path),
+
+    async setLanguage(lang) {
+      if (LANGS.includes(lang)) setLang(lang)
+    },
+
     branches: (id) => git.branches(context(id).project.path),
     async switchBranch(id, branch, leaveChanges) {
       const { project } = context(id)
@@ -282,14 +313,14 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const { project } = context(id)
       const clean = name.trim()
       if (!(await git.isValidBranchName(project.path, clean))) {
-        throw new Error('Nombre de rama no válido. No uses espacios ni caracteres especiales.')
+        throw new Error(t('err.branchName'))
       }
       await withChangesHandled(project.path, leaveChanges, () => git.createBranchFrom(project.path, clean, base))
     },
 
     async restoreChanges(id, ref) {
       const { project } = context(id)
-      if (!/^stash@\{\d+\}$/.test(ref)) throw new Error('Referencia no válida.')
+      if (!/^stash@\{\d+\}$/.test(ref)) throw new Error(t('err.badRef'))
       await git.stashPop(project.path, ref)
     },
     async log(id) {
@@ -298,12 +329,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     },
 
     commitDetail(id, hash) {
-      if (!hex.test(hash)) throw new Error('Commit no válido.')
+      if (!hex.test(hash)) throw new Error(t('err.badCommit'))
       return git.commitDetail(context(id).project.path, hash)
     },
 
     commitDiff(id, hash, file) {
-      if (!hex.test(hash)) throw new Error('Commit no válido.')
+      if (!hex.test(hash)) throw new Error(t('err.badCommit'))
       return git.commitDiff(context(id).project.path, hash, file)
     },
 
@@ -312,11 +343,11 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
     async mergeBranch(id, branch) {
       const { project, auth } = context(id)
       const current = await git.status(project.path)
-      if (current.branch === branch) throw new Error('No puedes hacer merge de una rama en sí misma.')
+      if (current.branch === branch) throw new Error(t('err.mergeSelf'))
       const count = await git.mergePreview(project.path, branch)
-      if (count === 0) return `${current.branch} ya tiene todo lo de ${branch}.`
+      if (count === 0) return t('msg.mergeUpToDate', { current: current.branch ?? '', branch })
       await git.mergeBranch(project.path, branch, auth)
-      return `Merge de ${branch} en ${current.branch} completado (${count} ${count === 1 ? 'commit' : 'commits'}).`
+      return t('msg.mergeBranchDone', { branch, current: current.branch ?? '', n: count })
     },
 
     async branchPull(id, branch) {
@@ -336,13 +367,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const { project, auth } = context(id)
       checkTagName(name)
       const status = await git.status(project.path)
-      if (!status.hasCommits) throw new Error('Haz al menos un commit antes de crear un tag.')
+      if (!status.hasCommits) throw new Error(t('err.commitFirstTag'))
       await git.createTag(project.path, name, message.trim(), auth)
       if (push) {
         try {
           await git.pushTag(project.path, name, auth)
         } catch (e) {
-          throw new Error(`El tag se creó, pero no se pudo subir: ${(e as Error).message}`)
+          throw new Error(t('err.tagNotPushed', { reason: (e as Error).message }))
         }
       }
     },
@@ -397,13 +428,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const { project, auth } = context(id)
       const { owner, repo } = repoRef(project)
       const current = await git.status(project.path)
-      if (!current.branch) throw new Error('No hay una rama activa.')
-      if (!current.upstream) throw new Error('Sube la rama a GitHub (Push) antes de crear el pull request.')
-      if (!input.title.trim()) throw new Error('Escribe un título.')
-      if (!input.base) throw new Error('Elige la rama destino.')
+      if (!current.branch) throw new Error(t('err.noBranch'))
+      if (!current.upstream) throw new Error(t('err.pushBranchFirst'))
+      if (!input.title.trim()) throw new Error(t('err.prTitle'))
+      if (!input.base) throw new Error(t('err.prBase'))
       // The branch name on GitHub comes from the upstream, e.g. "origin/feature/x" -> "feature/x".
       const head = current.upstream.replace(/^[^/]+\//, '') || current.branch
-      if (head === input.base) throw new Error('La rama del PR y la rama destino son la misma.')
+      if (head === input.base) throw new Error(t('err.prSameBranch'))
       return github.createPull(auth.token, owner, repo, {
         title: input.title.trim(),
         body: input.body,
@@ -429,8 +460,8 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const { project, auth } = context(id)
       const { owner, repo } = repoRef(project)
       const events: ReviewEvent[] = ['APPROVE', 'COMMENT', 'REQUEST_CHANGES']
-      if (!events.includes(event)) throw new Error('Tipo de revisión no válido.')
-      if (event !== 'APPROVE' && !body.trim()) throw new Error('Escribe un comentario para esta revisión.')
+      if (!events.includes(event)) throw new Error(t('err.reviewType'))
+      if (event !== 'APPROVE' && !body.trim()) throw new Error(t('err.reviewComment'))
       await github.submitReview(auth.token, owner, repo, checkPullNumber(number), event, body.trim())
     },
 
@@ -438,15 +469,15 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const { project, auth } = context(id)
       const { owner, repo } = repoRef(project)
       const methods: MergeMethod[] = ['merge', 'squash', 'rebase']
-      if (!methods.includes(method)) throw new Error('Método de merge no válido.')
+      if (!methods.includes(method)) throw new Error(t('err.mergeMethod'))
       const n = checkPullNumber(number)
 
       const pr = await github.fetchPull(auth.token, owner, repo, n)
-      if (pr.state !== 'open') throw new Error('Este pull request ya no está abierto.')
-      if (pr.draft) throw new Error('Es un borrador. Márcalo como listo en GitHub antes de hacer merge.')
+      if (pr.state !== 'open') throw new Error(t('err.prClosed'))
+      if (pr.draft) throw new Error(t('err.prDraft'))
 
       if (email) {
-        if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw new Error('Correo no válido.')
+        if (!/^[^\s@]+@[^\s@]+$/.test(email)) throw new Error(t('err.badEmail'))
         await github.mergePullWithEmail(auth.token, pr, method, email)
       } else {
         await github.mergePull(auth.token, owner, repo, n, method)
@@ -457,27 +488,23 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         try {
           await github.deleteBranch(auth.token, owner, repo, pr.head)
         } catch (e) {
-          note = ` No se pudo borrar la rama: ${(e as Error).message}`
+          note = t('msg.branchDeleteFailed', { reason: (e as Error).message })
         }
       }
-      return `Merge del pull request #${n} completado.${note}`
+      return t('msg.prMerged', { n, note })
     },
 
     async mergeEmails(id) {
       const { project, auth } = context(id)
       const account = accountByLogin(project.accountLogin)
       const options: MergeEmail[] = [
-        {
-          email: `${account.id}+${account.login}@users.noreply.github.com`,
-          label: 'Correo privado de GitHub',
-          kind: 'private'
-        }
+        { email: `${account.id}+${account.login}@users.noreply.github.com`, kind: 'private' }
       ]
       let limited = false
       try {
         for (const e of await github.fetchVerifiedEmails(auth.token)) {
           if (e.email.endsWith('@users.noreply.github.com') || options.some((o) => o.email === e.email)) continue
-          options.push({ email: e.email, label: e.primary ? 'Correo principal' : 'Correo verificado', kind: e.primary ? 'primary' : 'verified' })
+          options.push({ email: e.email, kind: e.primary ? 'primary' : 'verified' })
         }
       } catch {
         limited = true
@@ -487,7 +514,7 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
 
     async openExternal(url) {
       const allowed = /^https:\/\/github\.com\//.test(url) || url.startsWith('mailto:luisfevq+gitdog@gmail.com')
-      if (!allowed) throw new Error('URL no permitida.')
+      if (!allowed) throw new Error(t('err.badUrl'))
       await shell.openExternal(url)
     },
 

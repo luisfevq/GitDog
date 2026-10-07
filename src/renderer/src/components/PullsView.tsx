@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Project, PullRequest } from '@shared/types'
+import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
 import { PullDetailPane } from './PullDetailPane'
 import { RefreshIcon } from './Icons'
@@ -18,6 +19,7 @@ interface Props {
 type Filter = 'open' | 'closed' | 'all'
 
 export function PullsView({ project, login, hasRemote, isGitHub, onChanged, initialSelected }: Props): JSX.Element {
+  const { t } = useI18n()
   const id = project.id
 
   const [filter, setFilter] = useState<Filter>('open')
@@ -44,9 +46,7 @@ export function PullsView({ project, login, hasRemote, isGitHub, onChanged, init
   if (!hasRemote || !isGitHub) {
     return (
       <div className="center-note">
-        {hasRemote
-          ? 'Los pull requests solo están disponibles para proyectos de GitHub.'
-          : 'Publica el proyecto en GitHub para ver sus pull requests.'}
+        {hasRemote ? t('pr.onlyGithub') : t('pr.publishFirst')}
       </div>
     )
   }
@@ -60,18 +60,18 @@ export function PullsView({ project, login, hasRemote, isGitHub, onChanged, init
           <div className="segmented">
             {(['open', 'closed', 'all'] as Filter[]).map((f) => (
               <button key={f} className={filter === f ? 'on' : ''} onClick={() => setFilter(f)}>
-                {f === 'open' ? 'Abiertos' : f === 'closed' ? 'Cerrados' : 'Todos'}
+                {f === 'open' ? t('pr.filterOpen') : f === 'closed' ? t('pr.filterClosed') : t('pr.filterAll')}
               </button>
             ))}
           </div>
-          <button className="icon-btn" title="Actualizar" onClick={() => void load()}>
+          <button className="icon-btn" title={t('pr.refresh')} onClick={() => void load()}>
             <RefreshIcon size={15} />
           </button>
         </div>
         {error && <div className="banner">{error}</div>}
         <div className="pr-list">
-          {pulls === null && <div className="empty-inline">Cargando pull requests…</div>}
-          {pulls?.length === 0 && !error && <div className="empty-inline">No hay pull requests en esta vista.</div>}
+          {pulls === null && <div className="empty-inline">{t('pr.loadingList')}</div>}
+          {pulls?.length === 0 && !error && <div className="empty-inline">{t('pr.emptyList')}</div>}
           {pulls?.map((p) => (
             <button
               key={p.number}
@@ -103,7 +103,7 @@ export function PullsView({ project, login, hasRemote, isGitHub, onChanged, init
         />
       ) : (
         <div className="pr-detail">
-          <div className="diff-empty">Elige un pull request para ver el detalle.</div>
+          <div className="diff-empty">{t('pr.pickOne')}</div>
         </div>
       )}
     </div>

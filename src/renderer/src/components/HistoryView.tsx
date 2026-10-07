@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Account, CommitDetail, CommitFile, CommitInfo } from '@shared/types'
+import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
 import { Avatar, isAccountEmail } from './Avatar'
 import { DiffView } from './DiffView'
@@ -26,6 +27,7 @@ function RefChip({ name }: { name: string }): JSX.Element {
 }
 
 export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Element {
+  const { t, lang } = useI18n()
   const toast = useToast()
   const [commits, setCommits] = useState<CommitInfo[] | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
@@ -76,14 +78,14 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
     window.api
       .commitDiff(projectId, hash, file)
       .then((text) => !cancelled && setDiff(text))
-      .catch((e: Error) => !cancelled && setDiff(`No se pudo leer el diff:\n${e.message}`))
+      .catch((e: Error) => !cancelled && setDiff(t('df.error', { reason: e.message })))
     return () => {
       cancelled = true
     }
-  }, [projectId, hash, file])
+  }, [projectId, hash, file, t])
 
-  if (commits === null) return <div className="center-note">Leyendo historial…</div>
-  if (commits.length === 0) return <div className="center-note">Aún no hay commits.</div>
+  if (commits === null) return <div className="center-note">{t('hs.reading')}</div>
+  if (commits.length === 0) return <div className="center-note">{t('hs.empty')}</div>
 
   const pending = commits.filter((c) => c.unpushed).length
 
@@ -98,9 +100,9 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
           const prev = commits[i - 1]
           const header =
             c.unpushed && !prev?.unpushed
-              ? `Pendiente de subir · ${pending}`
+              ? t('hs.pendingGroup', { n: pending })
               : !c.unpushed && prev?.unpushed
-                ? 'Ya en GitHub'
+                ? t('hs.pushedGroup')
                 : null
           return (
             <div key={c.hash}>
@@ -110,7 +112,7 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
                 <span className="crow-main">
                   <span className="crow-subject">{c.subject}</span>
                   <span className="crow-meta">
-                    {c.author} · <span title={new Date(c.date).toLocaleString('es')}>{timeAgo(c.date)}</span>
+                    {c.author} · <span title={new Date(c.date).toLocaleString(lang)}>{timeAgo(c.date)}</span>
                   </span>
                 </span>
                 <span className="crow-end">
@@ -118,7 +120,7 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
                     <RefChip key={r} name={r} />
                   ))}
                   {c.unpushed && (
-                    <span className="pending" title="Pendiente de subir">
+                    <span className="pending" title={t('hs.pending')}>
                       <ArrowUpIcon size={12} />
                     </span>
                   )}
@@ -142,22 +144,22 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
                 className="text-link"
                 onClick={() => {
                   void navigator.clipboard.writeText(current.hash)
-                  toast('Hash copiado')
+                  toast(t('hs.hashCopied'))
                 }}
               >
-                Copiar
+                {t('common.copy')}
               </button>
               {current.refs.map((r) => (
                 <RefChip key={r} name={r} />
               ))}
-              {current.unpushed && <span className="chip warn">Pendiente de subir</span>}
+              {current.unpushed && <span className="chip warn">{t('hs.pending')}</span>}
             </div>
             {detail?.body && <div className="commit-body-text">{detail.body}</div>}
           </div>
           <div className="commit-files-diff">
             <div className="cfiles">
               <div className="files-head">
-                {detail ? `${detail.files.length} ${detail.files.length === 1 ? 'archivo' : 'archivos'}` : 'Cargando…'}
+                {detail ? t('common.files', { n: detail.files.length }) : t('common.loading')}
               </div>
               {detail?.files.map((f) => {
                 const { dir, file: name } = splitPath(f.path)
@@ -178,7 +180,7 @@ export function HistoryView({ projectId, account, refreshKey }: Props): JSX.Elem
               })}
             </div>
             <div className="cdiff">
-              {file ? <DiffView text={diff} /> : <div className="diff-empty">Este commit no cambia archivos.</div>}
+              {file ? <DiffView text={diff} /> : <div className="diff-empty">{t('hs.noChanges')}</div>}
             </div>
           </div>
         </div>

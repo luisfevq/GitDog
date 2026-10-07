@@ -45,7 +45,7 @@ function createWindow(): void {
 app.setAboutPanelOptions({
   applicationName: 'GitDog',
   applicationVersion: app.getVersion(),
-  credits: 'Desarrollado por Luis Felipe\nluisfevq+gitdog@gmail.com'
+  credits: 'Luis Felipe\nluisfevq+gitdog@gmail.com'
 })
 
 app.whenReady().then(() => {

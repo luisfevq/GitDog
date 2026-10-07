@@ -2,6 +2,7 @@ import { app, safeStorage } from 'electron'
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type { Account, Project } from '../shared/types'
+import { t } from './lang'
 
 /**
  * Two files on purpose:
@@ -57,7 +58,7 @@ export function saveConfig(): void {
 
 export function setToken(login: string, token: string): void {
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error('El Keychain de macOS no está disponible. No se puede guardar el token.')
+    throw new Error(t('err.keychain'))
   }
   secrets[login] = safeStorage.encryptString(token).toString('base64')
   writeJson('secrets.json', secrets)
@@ -65,7 +66,7 @@ export function setToken(login: string, token: string): void {
 
 export function getToken(login: string): string {
   const encrypted = secrets[login]
-  if (!encrypted) throw new Error(`No hay token para la cuenta ${login}. Vuelve a iniciar sesión.`)
+  if (!encrypted) throw new Error(t('err.noToken', { login }))
   return safeStorage.decryptString(Buffer.from(encrypted, 'base64'))
 }
 

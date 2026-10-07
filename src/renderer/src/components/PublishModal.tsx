@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Project, Snapshot } from '@shared/types'
+import { useI18n } from '../i18n'
 import { Modal } from './Modal'
 import { useToast } from './Toast'
 
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function PublishModal({ project, login, onClose, onDone }: Props): JSX.Element {
+  const { t } = useI18n()
   const toast = useToast()
   const [name, setName] = useState(project.name)
   const [description, setDescription] = useState('')
@@ -26,7 +28,7 @@ export function PublishModal({ project, login, onClose, onDone }: Props): JSX.El
         description: description.trim(),
         private: isPrivate
       })
-      toast(`Publicado en ${login}/${name.trim()}`)
+      toast(t('publish.done', { login, name: name.trim() }))
       onDone(state)
     } catch (e) {
       toast((e as Error).message, 'error')
@@ -37,30 +39,30 @@ export function PublishModal({ project, login, onClose, onDone }: Props): JSX.El
 
   return (
     <Modal
-      title={`Publicar en ${login}`}
+      title={t('publish.title', { login })}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button className="btn primary" disabled={!name.trim() || busy} onClick={publish}>
-            {busy ? 'Publicando…' : 'Publicar'}
+            {busy ? t('publish.busy') : t('publish.button')}
           </button>
         </>
       }
     >
       <label className="field">
-        <span>Nombre del repositorio</span>
+        <span>{t('publish.name')}</span>
         <input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
       </label>
       <label className="field">
-        <span>Descripción (opcional)</span>
+        <span>{t('publish.description')}</span>
         <input value={description} onChange={(e) => setDescription(e.target.value)} />
       </label>
       <label className="check-row">
         <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
-        <span>Repositorio privado</span>
+        <span>{t('publish.private')}</span>
       </label>
     </Modal>
   )

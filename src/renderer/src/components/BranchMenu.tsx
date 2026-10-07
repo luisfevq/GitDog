@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { BranchInfo } from '@shared/types'
+import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
-import { BranchIcon, CheckIcon, PlusIcon } from './Icons'
+import { BranchIcon, CheckIcon, ChevronDownIcon, PlusIcon } from './Icons'
 
 interface Props {
   current: string | null
@@ -14,6 +15,7 @@ interface Props {
 }
 
 export function BranchMenu({ current, branches, baseBranch, onSwitch, onCreate, onMerge }: Props): JSX.Element {
+  const { t, tr } = useI18n()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const ref = useRef<HTMLDivElement>(null)
@@ -43,21 +45,29 @@ export function BranchMenu({ current, branches, baseBranch, onSwitch, onCreate, 
 
   return (
     <div className="branch" ref={ref}>
-      <button className="tool-btn" onClick={() => setOpen((o) => !o)}>
-        <BranchIcon size={15} />
-        <span>{current ?? 'HEAD suelto'}</span>
+      <button className="seg" onClick={() => setOpen((o) => !o)}>
+        <span className="seg-icon">
+          <BranchIcon size={18} />
+        </span>
+        <span className="seg-text">
+          <span className="seg-caption">{t('rp.currentBranch')}</span>
+          <span className="seg-title">{current ?? t('br.detached')}</span>
+        </span>
+        <span className="seg-chevron">
+          <ChevronDownIcon size={14} />
+        </span>
       </button>
       {open && (
         <div className="popover branch-pop">
           <input
             className="search branch-search"
             autoFocus
-            placeholder="Buscar rama…"
+            placeholder={t('br.search')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <div className="branch-list">
-            {shown.length === 0 && <div className="empty-inline">Sin resultados.</div>}
+            {shown.length === 0 && <div className="empty-inline">{t('common.noResults')}</div>}
             {shown.map((b) => (
               <button
                 key={b.name}
@@ -69,7 +79,7 @@ export function BranchMenu({ current, branches, baseBranch, onSwitch, onCreate, 
               >
                 <span className="branch-check">{b.name === current && <CheckIcon size={14} />}</span>
                 <span className="branch-name">{b.name}</span>
-                {b.name === baseBranch && <span className="chip">principal</span>}
+                {b.name === baseBranch && <span className="chip">{t('br.main')}</span>}
                 <span className="branch-time">{timeAgo(b.date)}</span>
               </button>
             ))}
@@ -82,7 +92,7 @@ export function BranchMenu({ current, branches, baseBranch, onSwitch, onCreate, 
               onCreate()
             }}
           >
-            <PlusIcon size={14} /> Nueva rama…
+            <PlusIcon size={14} /> {t('br.new')}
           </button>
           <button
             className="pop-item"
@@ -93,9 +103,7 @@ export function BranchMenu({ current, branches, baseBranch, onSwitch, onCreate, 
             }}
           >
             <BranchIcon size={14} />
-            <span>
-              Merge de otra rama en <b>{current ?? 'HEAD'}</b>…
-            </span>
+            <span>{tr('br.mergeInto', { current: current ?? 'HEAD' })}</span>
           </button>
         </div>
       )}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { PullRequest, ReviewEvent } from '@shared/types'
+import { useI18n } from '../i18n'
 import { Modal } from './Modal'
 import { useToast } from './Toast'
 
@@ -12,19 +13,14 @@ interface Props {
   onDone: () => void
 }
 
-const OPTIONS: { value: ReviewEvent; title: string; text: string }[] = [
-  { value: 'COMMENT', title: 'Comentar', text: 'Deja un comentario sin aprobar ni bloquear.' },
-  { value: 'APPROVE', title: 'Aprobar', text: 'Aprueba estos cambios.' },
-  { value: 'REQUEST_CHANGES', title: 'Solicitar cambios', text: 'Pide cambios antes de poder hacer merge.' }
-]
-
-const DONE: Record<ReviewEvent, string> = {
-  COMMENT: 'Comentario enviado',
-  APPROVE: 'Pull request aprobado',
-  REQUEST_CHANGES: 'Cambios solicitados'
-}
+const OPTIONS = [
+  { value: 'COMMENT', title: 'rv.comment', text: 'rv.commentHint', done: 'rv.doneComment' },
+  { value: 'APPROVE', title: 'rv.approve', text: 'rv.approveHint', done: 'rv.doneApprove' },
+  { value: 'REQUEST_CHANGES', title: 'rv.request', text: 'rv.requestHint', done: 'rv.doneRequest' }
+] as const satisfies readonly { value: ReviewEvent; title: string; text: string; done: string }[]
 
 export function ReviewModal({ projectId, pull, isOwn, onClose, onDone }: Props): JSX.Element {
+  const { t } = useI18n()
   const toast = useToast()
   const [event, setEvent] = useState<ReviewEvent>('COMMENT')
   const [body, setBody] = useState('')
@@ -38,7 +34,7 @@ export function ReviewModal({ projectId, pull, isOwn, onClose, onDone }: Props):
     setBusy(true)
     try {
       await window.api.reviewPull(projectId, pull.number, event, body)
-      toast(DONE[event])
+      toast(t(OPTIONS.find((o) => o.value === event)?.done ?? 'rv.doneComment'))
       onDone()
     } catch (e) {
       toast((e as Error).message, 'error')
@@ -49,15 +45,15 @@ export function ReviewModal({ projectId, pull, isOwn, onClose, onDone }: Props):
 
   return (
     <Modal
-      title={`Revisar #${pull.number}`}
+      title={t('rv.title', { n: pull.number })}
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button className="btn primary" disabled={!canSend} onClick={send}>
-            {busy ? 'Enviando…' : 'Enviar revisión'}
+            {busy ? t('rv.sending') : t('rv.send')}
           </button>
         </>
       }
@@ -66,7 +62,7 @@ export function ReviewModal({ projectId, pull, isOwn, onClose, onDone }: Props):
       <textarea
         rows={6}
         autoFocus
-        placeholder={needsText ? 'Escribe tu comentario' : 'Comentario (opcional)'}
+        placeholder={needsText ? t('rv.placeholderRequired') : t('rv.placeholderOptional')}
         value={body}
         onChange={(e) => setBody(e.target.value)}
       />
@@ -83,8 +79,8 @@ export function ReviewModal({ projectId, pull, isOwn, onClose, onDone }: Props):
                 onChange={() => setEvent(o.value)}
               />
               <span>
-                <b>{o.title}</b>
-                <small>{blocked ? 'GitHub no deja hacerlo en tu propio pull request.' : o.text}</small>
+                <b>{t(o.title)}</b>
+                <small>{blocked ? t('rv.ownBlocked') : t(o.text)}</small>
               </span>
             </label>
           )

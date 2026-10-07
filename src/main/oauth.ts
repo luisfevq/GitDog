@@ -1,3 +1,5 @@
+import { t } from './lang'
+
 /**
  * GitHub OAuth "device flow": no client secret and no callback server needed.
  * Setup (one time, free): GitHub > Settings > Developer settings > OAuth Apps > New OAuth App.
@@ -25,7 +27,7 @@ async function post<T>(url: string, body: Record<string, string>): Promise<T> {
 }
 
 export async function startDeviceFlow(): Promise<DeviceStart> {
-  if (!isConfigured()) throw new Error('El login por navegador no está configurado.')
+  if (!isConfigured()) throw new Error(t('err.oauthOff'))
   const r = await post<{
     device_code?: string
     user_code?: string
@@ -38,8 +40,8 @@ export async function startDeviceFlow(): Promise<DeviceStart> {
   if (!r.device_code || !r.user_code || !r.verification_uri) {
     throw new Error(
       r.error === 'device_flow_disabled'
-        ? 'Activa "Device Flow" en la OAuth App de GitHub.'
-        : `GitHub no pudo iniciar el login (${r.error ?? 'sin respuesta'}).`
+        ? t('err.oauthDeviceOff')
+        : t('err.oauthStart', { reason: r.error ?? t('err.noReply') })
     )
   }
   return {
@@ -53,7 +55,7 @@ export async function startDeviceFlow(): Promise<DeviceStart> {
 
 const sleep = (ms: number, signal: AbortSignal): Promise<void> =>
   new Promise((resolve, reject) => {
-    const cancelled = (): Error => new Error('Inicio de sesión cancelado.')
+    const cancelled = (): Error => new Error(t('err.loginCancelled'))
     if (signal.aborted) return reject(cancelled())
     const timer = setTimeout(resolve, ms)
     signal.addEventListener(
@@ -88,12 +90,12 @@ export async function pollForToken(start: DeviceStart, signal: AbortSignal): Pro
         interval += 5
         continue
       case 'access_denied':
-        throw new Error('Cancelaste la autorización en GitHub.')
+        throw new Error(t('err.authDenied'))
       case 'expired_token':
-        throw new Error('El código expiró. Inténtalo de nuevo.')
+        throw new Error(t('err.codeExpired'))
       default:
-        throw new Error(r.error_description || r.error || 'Error de GitHub al iniciar sesión.')
+        throw new Error(r.error_description || r.error || t('err.githubLogin'))
     }
   }
-  throw new Error('El código expiró. Inténtalo de nuevo.')
+  throw new Error(t('err.codeExpired'))
 }

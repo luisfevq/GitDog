@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
+import { LANGS } from '@shared/i18n'
 import type { Account } from '@shared/types'
+import { useI18n } from '../i18n'
 import { CheckIcon, PlusIcon, SwitchIcon } from './Icons'
 
 interface Props {
@@ -11,6 +13,7 @@ interface Props {
 }
 
 export function AccountMenu({ accounts, active, onSwitch, onAdd, onRemove }: Props): JSX.Element {
+  const { t, lang, setLang } = useI18n()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -39,7 +42,7 @@ export function AccountMenu({ accounts, active, onSwitch, onAdd, onRemove }: Pro
             <span className="account-login">{active.login}</span>
           </>
         ) : (
-          <span className="account-login">Sin cuenta</span>
+          <span className="account-login">{t('acct.none')}</span>
         )}
         <span className="switch">
           <SwitchIcon size={15} />
@@ -48,7 +51,7 @@ export function AccountMenu({ accounts, active, onSwitch, onAdd, onRemove }: Pro
 
       {open && (
         <div className="popover account-pop">
-          <div className="pop-label">Cuentas</div>
+          <div className="pop-label">{t('acct.accounts')}</div>
           {accounts.map((a) => (
             <div key={a.login} className="account-row">
               <button
@@ -67,13 +70,13 @@ export function AccountMenu({ accounts, active, onSwitch, onAdd, onRemove }: Pro
               </button>
               <button
                 className="link-danger"
-                title="Quitar cuenta de GitDog"
+                title={t('acct.removeTitle')}
                 onClick={() => {
                   setOpen(false)
                   onRemove(a.login)
                 }}
               >
-                Quitar
+                {t('common.remove')}
               </button>
             </div>
           ))}
@@ -85,8 +88,19 @@ export function AccountMenu({ accounts, active, onSwitch, onAdd, onRemove }: Pro
               onAdd()
             }}
           >
-            <PlusIcon size={15} /> Agregar cuenta…
+            <PlusIcon size={15} /> {t('acct.add')}
           </button>
+          <div className="pop-sep" />
+          <div className="lang-row">
+            <span>{t('common.language')}</span>
+            <div className="segmented">
+              {LANGS.map((code) => (
+                <button key={code} className={lang === code ? 'on' : ''} onClick={() => setLang(code)}>
+                  {code === 'es' ? 'Español' : 'English'}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>

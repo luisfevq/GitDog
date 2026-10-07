@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
+import { useI18n } from '../i18n'
 import { CloseIcon } from './Icons'
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export function Modal({ title, onClose, children, footer, wide }: Props): JSX.Element {
+  const { t } = useI18n()
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') onClose()
@@ -23,7 +25,7 @@ export function Modal({ title, onClose, children, footer, wide }: Props): JSX.El
       <div className={`modal ${wide ? 'wide' : ''}`} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Cerrar">
+          <button className="icon-btn" onClick={onClose} aria-label={t('common.close')}>
             <CloseIcon />
           </button>
         </div>
@@ -36,13 +38,16 @@ export function Modal({ title, onClose, children, footer, wide }: Props): JSX.El
 
 interface ConfirmProps {
   title: string
-  body: string
+  body: ReactNode
   confirmLabel: string
+  /** The action cannot be undone: the confirm button is red */
+  danger?: boolean
   onConfirm: () => void
   onClose: () => void
 }
 
-export function ConfirmModal({ title, body, confirmLabel, onConfirm, onClose }: ConfirmProps): JSX.Element {
+export function ConfirmModal({ title, body, confirmLabel, danger, onConfirm, onClose }: ConfirmProps): JSX.Element {
+  const { t } = useI18n()
   return (
     <Modal
       title={title}
@@ -50,9 +55,9 @@ export function ConfirmModal({ title, body, confirmLabel, onConfirm, onClose }: 
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
-          <button className="btn primary" onClick={onConfirm}>
+          <button className={`btn ${danger ? 'danger' : 'primary'}`} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </>

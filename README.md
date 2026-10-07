@@ -17,11 +17,15 @@
 - **Proyectos por cuenta**: agrega carpetas locales o clona repositorios de la cuenta activa.
 - **Cada proyecto usa su cuenta**: push, pull y clone usan solo el token de esa cuenta. Los commits salen con su nombre y correo.
 - **Día a día**: cambios, diff, commit, push y pull, con una barra de progreso mientras sube o baja.
+- **Un solo botón de sincronización**: junto a la rama, el botón ofrece el siguiente paso (Publicar rama, Pull origin, Push origin o Fetch origin) y muestra el progreso dentro de sí mismo. GitDog busca cambios en GitHub cada 5 minutos.
+- **Commit rápido**: con un solo archivo marcado, el mensaje por defecto es `Update <archivo>` (o `Create`, `Delete`, `Rename`). Debajo del commit, **Deshacer** revierte el último commit si aún no se subió, y devuelve los cambios y el mensaje.
+- **Menú del archivo** (clic derecho): descartar cambios (se deja una copia en la Papelera), añadir a `.gitignore` (archivo, carpeta o extensión), copiar la ruta y mostrar en Finder.
 - **Historial**: lista de commits con autor, fecha y etiquetas, marca lo pendiente de subir y muestra los archivos y el diff de cada commit.
 - **Ramas**: lista con la fecha del último commit y buscador. Una rama nueva se publica con **Publicar rama**, y se puede hacer merge de otra rama en la actual.
 - **Cambios pendientes**: al cambiar de rama con cambios, pregunta si los dejas o los llevas. Al crear una rama, pregunta si sale de la actual o de `main`.
 - **Tags**: crear (simples o anotados), subir, eliminar.
 - **Pull requests**: ver la lista, los archivos con su diff y la conversación. Crear PRs, dejar revisiones (aprobar, comentar, solicitar cambios) y hacer merge. Si la rama ya tiene un PR abierto, un push lo actualiza y la barra muestra **PR #n** en vez de ofrecer crear otro.
+- **Español e inglés**: se elige en el menú de la cuenta, arriba a la derecha. Por defecto usa el idioma del sistema.
 - **Versiones nuevas**: al abrir, y cada 6 horas, GitDog busca el último Release del repositorio y avisa si hay una versión más reciente. Si cierras el aviso, vuelve a aparecer a las 6 horas.
 - **Publicar**: convierte una carpeta local en un repositorio nuevo de la cuenta activa.
 
@@ -170,11 +174,13 @@ src/main        Proceso principal de Electron
   store.ts        Cuentas, proyectos y tokens
   ipc.ts          Puente entre la interfaz y el proceso principal
 src/preload     Puente seguro hacia la interfaz
-src/shared      Tipos y lista de métodos de la API
+src/shared      Tipos, lista de métodos de la API y textos (locales/, en español e inglés)
 src/renderer    Interfaz en React
 resources       Icono de la app
 scripts         Icono, nombre en desarrollo y firma del instalador
 ```
+
+Para agregar o cambiar un texto, edita el archivo de `src/shared/locales/` que corresponda. Cada mensaje tiene su versión en español y en inglés, y el compilador avisa si falta una. En la interfaz se usa `t('clave')`.
 
 Para agregar una función: define el método en `src/shared/types.ts` (interfaz `Api` y `API_METHODS`), impleméntalo en `src/main/ipc.ts`, y úsalo desde la interfaz con `window.api`.
 

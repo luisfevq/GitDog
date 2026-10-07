@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Repo, Snapshot } from '@shared/types'
+import { useI18n } from '../i18n'
 import { useGitProgress } from '../lib/useGitProgress'
 import { LockIcon } from './Icons'
 import { Modal } from './Modal'
@@ -15,6 +16,7 @@ interface Props {
 const DIR_KEY = 'gitdog.cloneDir'
 
 export function CloneModal({ login, onClose, onDone }: Props): JSX.Element {
+  const { t } = useI18n()
   const toast = useToast()
   const [repos, setRepos] = useState<Repo[] | null>(null)
   const [query, setQuery] = useState('')
@@ -53,7 +55,7 @@ export function CloneModal({ login, onClose, onDone }: Props): JSX.Element {
     try {
       localStorage.setItem(DIR_KEY, dir)
       const state = await window.api.cloneRepo(login, picked.cloneUrl, dir, picked.name)
-      toast(`${picked.name} clonado`)
+      toast(t('clone.done', { name: picked.name }))
       onDone(state)
     } catch (e) {
       toast((e as Error).message, 'error')
@@ -64,30 +66,30 @@ export function CloneModal({ login, onClose, onDone }: Props): JSX.Element {
 
   return (
     <Modal
-      title={`Clonar repositorio de ${login}`}
+      title={t('clone.title', { login })}
       wide
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button className="btn primary" disabled={!picked || !dir || busy} onClick={clone}>
-            {busy ? 'Clonando…' : 'Clonar'}
+            {busy ? t('clone.busy') : t('clone.button')}
           </button>
         </>
       }
     >
       <input
         className="search"
-        placeholder="Buscar repositorio…"
+        placeholder={t('clone.search')}
         autoFocus
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
       <div className="repo-list">
-        {repos === null && <div className="empty-inline">Cargando repositorios…</div>}
-        {repos !== null && filtered.length === 0 && <div className="empty-inline">Sin resultados.</div>}
+        {repos === null && <div className="empty-inline">{t('clone.loading')}</div>}
+        {repos !== null && filtered.length === 0 && <div className="empty-inline">{t('common.noResults')}</div>}
         {filtered.map((r) => (
           <button
             key={r.fullName}
@@ -101,13 +103,13 @@ export function CloneModal({ login, onClose, onDone }: Props): JSX.Element {
           </button>
         ))}
       </div>
-      {busy && <ProgressBar progress={progress} fallback="Clonando…" />}
+      {busy && <ProgressBar progress={progress} fallback={t('clone.busy')} />}
       <div className="dest-row">
         <span className="dest-path" title={dir}>
-          {dir ? `${dir}/${picked?.name ?? ''}` : 'Elige dónde guardar el proyecto'}
+          {dir ? `${dir}/${picked?.name ?? ''}` : t('clone.chooseWhere')}
         </span>
         <button className="btn" onClick={chooseDir}>
-          Elegir carpeta…
+          {t('clone.chooseFolder')}
         </button>
       </div>
     </Modal>

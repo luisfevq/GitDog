@@ -120,3 +120,8 @@ export const MailIcon = (p: P): JSX.Element => (
     <path d="m3 7 9 6 9-6" />
   </Svg>
 )
+export const ChevronDownIcon = (p: P): JSX.Element => (
+  <Svg {...p}>
+    <path d="m6 9 6 6 6-6" />
+  </Svg>
+)

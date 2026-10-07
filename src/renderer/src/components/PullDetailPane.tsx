@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { PullDetail, PullEvent, PullFile, PullRequest } from '@shared/types'
+import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
 import { DiffView } from './DiffView'
 import { BranchIcon, ExternalIcon } from './Icons'
@@ -17,16 +18,17 @@ interface Props {
 
 type Section = 'summary' | 'files' | 'conversation'
 
-const STATE_LABEL = { open: 'Abierto', closed: 'Cerrado', merged: 'Merged' } as const
+const STATE_KEY = { open: 'pr.stateOpen', closed: 'pr.stateClosed', merged: 'pr.stateMerged' } as const
 const FILE_BADGE: Record<string, string> = { added: 'A', removed: 'D', modified: 'M', renamed: 'R', copied: 'C', changed: 'M' }
-const REVIEW_LABEL: Record<string, string> = {
-  APPROVED: 'Aprobó',
-  CHANGES_REQUESTED: 'Pidió cambios',
-  COMMENTED: 'Comentó',
-  DISMISSED: 'Revisión descartada'
-}
+const REVIEW_KEY = {
+  APPROVED: 'pr.reviewApproved',
+  CHANGES_REQUESTED: 'pr.reviewChanges',
+  COMMENTED: 'pr.reviewCommented',
+  DISMISSED: 'pr.reviewDismissed'
+} as const
 
 export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JSX.Element {
+  const { t } = useI18n()
   const toast = useToast()
   const [section, setSection] = useState<Section>('summary')
   const [detail, setDetail] = useState<PullDetail | null>(null)
@@ -90,11 +92,11 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
             {shown.title} <span className="pr-num">#{shown.number}</span>
           </h3>
           <button className="btn" onClick={() => open(shown.url)}>
-            <ExternalIcon size={14} /> Abrir en GitHub
+            <ExternalIcon size={14} /> {t('app.openOnGithub')}
           </button>
         </div>
         <div className="pr-meta">
-          <span className={`state-pill ${isDraft ? 'draft' : shown.state}`}>{isDraft ? 'Borrador' : STATE_LABEL[shown.state]}</span>
+          <span className={`state-pill ${isDraft ? 'draft' : shown.state}`}>{isDraft ? t('pr.draft') : t(STATE_KEY[shown.state])}</span>
           {shown.authorAvatar && <img src={shown.authorAvatar} alt="" className="avatar small" />}
           <span>
             <b>{shown.author}</b> · {timeAgo(shown.createdAt)}
@@ -105,13 +107,13 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
         </div>
         <div className="subtabs">
           <button className={section === 'summary' ? 'on' : ''} onClick={() => setSection('summary')}>
-            Resumen
+            {t('pr.tabSummary')}
           </button>
           <button className={section === 'files' ? 'on' : ''} onClick={() => setSection('files')}>
-            Archivos {detail && <span className="pill">{detail.changedFiles}</span>}
+            {t('pr.tabFiles')} {detail && <span className="pill">{detail.changedFiles}</span>}
           </button>
           <button className={section === 'conversation' ? 'on' : ''} onClick={() => setSection('conversation')}>
-            Conversación {detail && detail.comments > 0 && <span className="pill">{detail.comments}</span>}
+            {t('pr.tabConversation')} {detail && detail.comments > 0 && <span className="pill">{detail.comments}</span>}
           </button>
         </div>
       </div>
@@ -123,19 +125,19 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
               <div className="pr-stats">
                 <span className="add">+{detail.additions}</span>
                 <span className="del">−{detail.deletions}</span>
-                <span>{detail.changedFiles} archivos</span>
-                <span>{detail.commits} commits</span>
-                <span>{detail.comments} comentarios</span>
+                <span>{t('common.files', { n: detail.changedFiles })}</span>
+                <span>{t('common.commits', { n: detail.commits })}</span>
+                <span>{t('pr.statComments', { n: detail.comments })}</span>
               </div>
             )}
-            <div className="pr-body">{shown.body.trim() || 'Sin descripción.'}</div>
+            <div className="pr-body">{shown.body.trim() || t('pr.noDescription')}</div>
           </div>
         )}
 
         {section === 'files' && (
           <div className="pr-files">
-            {files === null && <div className="empty-inline">Cargando archivos…</div>}
-            {files?.length === 0 && <div className="empty-inline">No hay archivos que mostrar.</div>}
+            {files === null && <div className="empty-inline">{t('pr.loadingFiles')}</div>}
+            {files?.length === 0 && <div className="empty-inline">{t('pr.noFiles')}</div>}
             {files?.map((f) => (
               <div key={f.path} className="pr-file">
                 <button className="pr-file-head" onClick={() => setOpenFile(openFile === f.path ? null : f.path)}>
@@ -153,7 +155,7 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
                       <DiffView text={f.patch} />
                     </div>
                   ) : (
-                    <div className="diff-empty">Archivo binario o demasiado grande. Ábrelo en GitHub para verlo.</div>
+                    <div className="diff-empty">{t('pr.binary')}</div>
                   ))}
               </div>
             ))}
@@ -162,8 +164,8 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
 
         {section === 'conversation' && (
           <div className="pr-pad">
-            {events === null && <div className="empty-inline">Cargando conversación…</div>}
-            {events?.length === 0 && <div className="empty-inline">Aún no hay comentarios ni revisiones.</div>}
+            {events === null && <div className="empty-inline">{t('pr.loadingConversation')}</div>}
+            {events?.length === 0 && <div className="empty-inline">{t('pr.noConversation')}</div>}
             {events?.map((e) => (
               <div key={e.id} className="thread">
                 {e.authorAvatar ? <img src={e.authorAvatar} alt="" className="avatar" /> : <span className="avatar" />}
@@ -171,7 +173,7 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
                   <div className="thread-head">
                     <b>{e.author}</b>
                     {e.kind === 'review' && e.state && (
-                      <span className={`chip review-${e.state}`}>{REVIEW_LABEL[e.state] ?? e.state}</span>
+                      <span className={`chip review-${e.state}`}>{e.state in REVIEW_KEY ? t(REVIEW_KEY[e.state as keyof typeof REVIEW_KEY]) : e.state}</span>
                     )}
                     {e.kind === 'line' && e.path && <code>{e.path}</code>}
                     <span className="thread-time">{timeAgo(e.createdAt)}</span>
@@ -186,15 +188,13 @@ export function PullDetailPane({ projectId, login, pull, onChanged }: Props): JS
 
       {pull.state === 'open' && (
         <div className="pr-actions">
-          <span className="hint">
-            {isOwn ? 'Este PR es tuyo: solo puedes comentar.' : `Revisando como ${login}`}
-          </span>
+          <span className="hint">{isOwn ? t('pr.ownPr') : t('pr.reviewingAs', { login })}</span>
           <div className="grow" />
           <button className="btn" onClick={() => setReviewing(true)}>
-            Revisar
+            {t('pr.review')}
           </button>
           <button className="btn primary" disabled={!detail} onClick={() => setMerging(true)}>
-            Merge…
+            {t('pr.merge')}
           </button>
         </div>
       )}

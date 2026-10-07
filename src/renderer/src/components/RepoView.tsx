@@ -1,17 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { githubWebUrl } from '@shared/github-url'
 import type { Account, BranchInfo, FileChange, Project, PullRequest, RepoStatus, Snapshot } from '@shared/types'
+import { useI18n } from '../i18n'
+import { useGitProgress } from '../lib/useGitProgress'
+import { timeAgo } from '../lib/time'
 import { BranchMenu } from './BranchMenu'
 import { MergeBranchModal, NewBranchModal, SwitchBranchModal } from './BranchModals'
+import { ContextMenu, type MenuItem } from './ContextMenu'
+import { CreatePrModal } from './CreatePrModal'
 import { DiffView } from './DiffView'
 import { HistoryView } from './HistoryView'
-import { ProgressBar } from './ProgressBar'
 import { ArrowDownIcon, ArrowUpIcon, PullRequestIcon, RefreshIcon, UploadIcon } from './Icons'
-import { CreatePrModal } from './CreatePrModal'
+import { ConfirmModal } from './Modal'
 import { PublishModal } from './PublishModal'
 import { PullsView } from './PullsView'
 import { TagsView } from './TagsView'
-import { useGitProgress } from '../lib/useGitProgress'
-import { githubWebUrl } from '@shared/github-url'
 import { useToast } from './Toast'
 
 interface Props {
@@ -22,12 +25,24 @@ interface Props {
 
 type Tab = 'changes' | 'history' | 'tags' | 'pulls'
 
+const FETCH_EVERY_MS = 5 * 60 * 1000
+
 const splitPath = (path: string): { dir: string; file: string } => {
   const i = path.lastIndexOf('/')
   return i === -1 ? { dir: '', file: path } : { dir: path.slice(0, i + 1), file: path.slice(i + 1) }
 }
 
+/** The commit message Git users expect when a single file changed: "Update app.ts". */
+function defaultSummary(file: FileChange): string {
+  const name = splitPath(file.path).file
+  if (file.untracked || file.status === 'A') return `Create ${name}`
+  if (file.status === 'D') return `Delete ${name}`
+  if (file.status === 'R') return `Rename ${splitPath(file.orig ?? '').file} to ${name}`
+  return `Update ${name}`
+}
+
 export function RepoView({ project, account, onState }: Props): JSX.Element {
+  const { t, tr } = useI18n()
   const toast = useToast()
   const id = project.id
 
@@ -50,7 +65,11 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
   const [prCheck, setPrCheck] = useState(0)
   const [focus, setFocus] = useState<{ number: number; at: number } | null>(null)
   const [merging, setMerging] = useState(false)
-  const progress = useGitProgress(id, busy === 'push' || busy === 'pull')
+  const [menu, setMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null)
+  const [discarding, setDiscarding] = useState<FileChange[] | null>(null)
+  const busyRef = useRef<string | null>(null)
+  const syncing = busy === 'push' || busy === 'pull' || busy === 'fetch'
+  const progress = useGitProgress(id, syncing)
 
   const refresh = useCallback(async (): Promise<void> => {
     try {
@@ -83,6 +102,22 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
 
   const isGitHub = githubWebUrl(status?.remoteUrl ?? null) !== null
   const hasRemote = status?.hasRemote ?? false
+  const hasUpstream = !!status?.upstream
+
+  // Look for new commits on GitHub in the background, so "Pull origin" appears without asking.
+  useEffect(() => {
+    if (!hasRemote || !hasUpstream) return
+    const check = (): void => {
+      if (busyRef.current) return
+      window.api
+        .fetch(id)
+        .then(() => refresh())
+        .catch(() => undefined)
+    }
+    check()
+    const timer = setInterval(check, FETCH_EVERY_MS)
+    return () => clearInterval(timer)
+  }, [id, hasRemote, hasUpstream, refresh])
 
   // Name of the repo's main branch. Until it loads, main and master count as main.
   useEffect(() => {
@@ -119,14 +154,8 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
     setTab('pulls')
   }
 
-  // The button shows on any feature branch. It unlocks once everything is pushed.
-  const showPrButton = isGitHub && hasRemote && !!branch && !onMainBranch
-  const canPr = showPrButton && !!status?.upstream && status.ahead === 0
-  const prHint = !status?.upstream
-    ? 'Sube la rama con Push para poder crear el pull request'
-    : (status?.ahead ?? 0) > 0
-      ? 'Tienes commits sin subir. Haz Push para incluirlos en el pull request'
-      : 'Crear pull request'
+  // "Create PR" only shows when it can be used: a pushed feature branch without a pull request.
+  const canPr = isGitHub && hasRemote && !!branch && !onMainBranch && hasUpstream && status?.ahead === 0 && !branchPr
 
   const loadOpenPrs = useCallback((): void => {
     if (!isGitHub || !hasRemote) {
@@ -164,13 +193,14 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
     window.api
       .diff(id, selected)
       .then((text) => !cancelled && setDiffText(text))
-      .catch((e: Error) => !cancelled && setDiffText(`No se pudo leer el diff:\n${e.message}`))
+      .catch((e: Error) => !cancelled && setDiffText(t('df.error', { reason: e.message })))
     return () => {
       cancelled = true
     }
-  }, [id, selected, tab])
+  }, [id, selected, tab, t])
 
   const run = async (label: string, action: () => Promise<string | void>): Promise<void> => {
+    busyRef.current = label
     setBusy(label)
     try {
       const result = await action()
@@ -178,6 +208,7 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
     } catch (e) {
       toast((e as Error).message, 'error')
     } finally {
+      busyRef.current = null
       setBusy(null)
       await refresh()
     }
@@ -195,14 +226,24 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
       await (allStaged ? window.api.unstage(id, paths) : window.api.stage(id, paths))
     })
 
-  const stagedCount = files.filter((f) => f.staged).length
-  const canCommit = stagedCount > 0 && message.trim().length > 0 && !busy
+  const staged = files.filter((f) => f.staged)
+  const stagedCount = staged.length
+  // With one file in the commit, its message can be written for you.
+  const summary = stagedCount === 1 ? defaultSummary(staged[0]) : null
+  const canCommit = stagedCount > 0 && (message.trim().length > 0 || !!summary) && !busy
 
   const commit = (): Promise<void> =>
     run('commit', async () => {
-      await window.api.commit(id, message)
+      await window.api.commit(id, message.trim() || summary || '')
       setMessage('')
-      return 'Commit creado'
+      return t('rp.committed')
+    })
+
+  const undo = (): Promise<void> =>
+    run('undo', async () => {
+      const previous = await window.api.undoCommit(id)
+      setMessage((current) => current || previous)
+      return t('rp.undone')
     })
 
   const push = (): Promise<void> =>
@@ -213,37 +254,125 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
         setBranchPr(await window.api.branchPull(id, upstreamBranch ?? branch).catch(() => null))
         setPrPrompt(true)
       }
-      return 'Push completado'
+      return t('rp.pushed')
     })
 
   const pull = (): Promise<void> =>
     run('pull', async () => {
-      const out = await window.api.pull(id)
-      return out || 'Pull completado'
+      const result = await window.api.pull(id)
+      if (result.upToDate) return t('rp.upToDate')
+      return result.files ? t('rp.pulledFiles', { n: result.files }) : t('rp.pulled')
     })
+
+  const fetchOrigin = (): Promise<void> => run('fetch', () => window.api.fetch(id))
 
   const dirty = files.length > 0
 
-  const switchTo = (branch: string, leaveChanges: boolean): Promise<void> =>
+  const switchTo = (target: string, leaveChanges: boolean): Promise<void> =>
     run('checkout', async () => {
-      await window.api.switchBranch(id, branch, leaveChanges)
-      if (leaveChanges) return 'Cambios guardados en la rama anterior'
+      await window.api.switchBranch(id, target, leaveChanges)
+      if (leaveChanges) return t('rp.leftChanges')
     })
 
   const createBranch = (name: string, base: string | null, leaveChanges: boolean): Promise<void> =>
     run('checkout', async () => {
       await window.api.createBranch(id, name, base, leaveChanges)
-      return `Rama ${name} creada`
+      return t('rp.branchCreated', { name })
     })
 
-  const mergeInto = (from: string): Promise<void> =>
-    run('merge', async () => window.api.mergeBranch(id, from))
+  const mergeInto = (from: string): Promise<void> => run('merge', async () => window.api.mergeBranch(id, from))
 
   const restore = (ref: string): Promise<void> =>
     run('restore', async () => {
       await window.api.restoreChanges(id, ref)
-      return 'Cambios restaurados'
+      return t('rp.restored')
     })
+
+  const discard = (list: FileChange[]): Promise<void> =>
+    run('discard', async () => {
+      await window.api.discardChanges(id, list)
+      return t('rp.discarded')
+    })
+
+  const ignore = (pattern: string): Promise<void> =>
+    run('ignore', async () => {
+      await window.api.ignorePattern(id, pattern)
+      return t('rp.ignored', { pattern })
+    })
+
+  const copy = (text: string): void => {
+    void navigator.clipboard.writeText(text)
+    toast(t('rp.pathCopied'))
+  }
+
+  /** Right-click menu of a file in the changes list. */
+  const menuItems = (file: FileChange): MenuItem[] => {
+    const { dir } = splitPath(file.path)
+    const ext = file.path.includes('.') ? file.path.slice(file.path.lastIndexOf('.')) : ''
+    // Git only ignores files it does not track yet.
+    const canIgnore = file.untracked
+    const folders = dir
+      .split('/')
+      .filter(Boolean)
+      .map((_, i, parts) => parts.slice(0, i + 1).join('/'))
+    const absolute = `${project.path}/${file.path}`
+
+    const items: MenuItem[] = [
+      { kind: 'item', label: t('rp.menuDiscard'), danger: true, onSelect: () => setDiscarding([file]) }
+    ]
+    if (files.length > 1) {
+      items.push({
+        kind: 'item',
+        label: t('rp.menuDiscardAll', { n: files.length }),
+        danger: true,
+        onSelect: () => setDiscarding(files)
+      })
+    }
+    items.push(
+      { kind: 'separator' },
+      {
+        kind: 'item',
+        label: t('rp.menuIgnoreFile'),
+        disabled: !canIgnore,
+        hint: t('rp.menuTracked'),
+        onSelect: () => void ignore(`/${file.path}`)
+      }
+    )
+    if (folders.length > 0) {
+      items.push({ kind: 'label', label: t('rp.menuIgnoreFolder') })
+      for (const folder of [...folders].reverse()) {
+        items.push({
+          kind: 'item',
+          label: `${folder}/`,
+          indent: true,
+          disabled: !canIgnore,
+          hint: t('rp.menuTracked'),
+          onSelect: () => void ignore(`/${folder}/`)
+        })
+      }
+    }
+    if (ext) {
+      items.push({
+        kind: 'item',
+        label: t('rp.menuIgnoreExt', { ext: `*${ext}` }),
+        disabled: !canIgnore,
+        hint: t('rp.menuTracked'),
+        onSelect: () => void ignore(`*${ext}`)
+      })
+    }
+    items.push(
+      { kind: 'separator' },
+      { kind: 'item', label: t('rp.menuCopyPath'), onSelect: () => copy(absolute) },
+      { kind: 'item', label: t('rp.menuCopyRelative'), onSelect: () => copy(file.path) },
+      {
+        kind: 'item',
+        label: t('rp.menuReveal'),
+        disabled: file.status === 'D',
+        onSelect: () => void window.api.revealInFinder(absolute)
+      }
+    )
+    return items
+  }
 
   // Main branch for "new branch from main". Falls back to a local main or master.
   const baseBranch =
@@ -251,8 +380,69 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
     (branches.some((b) => b.name === 'main') ? 'main' : branches.some((b) => b.name === 'master') ? 'master' : null)
 
   if (!status) {
-    return <div className="center-note">{loadError ?? 'Leyendo repositorio…'}</div>
+    return <div className="center-note">{loadError ?? t('rp.reading')}</div>
   }
+
+  // The single button next to the branch: it always offers the next sensible step, like GitHub Desktop.
+  const sync = (() => {
+    if (!status.hasRemote) {
+      return {
+        icon: <UploadIcon size={18} />,
+        title: t('rp.publishProject', { login: account.login }),
+        sub: status.hasCommits ? t('rp.publishProjectSub') : t('rp.commitFirst'),
+        count: 0,
+        accent: status.hasCommits,
+        disabled: !status.hasCommits,
+        run: () => setPublishing(true)
+      }
+    }
+    if (!status.upstream) {
+      return {
+        icon: <UploadIcon size={18} />,
+        title: t('rp.publishBranch'),
+        sub: t('rp.publishBranchSub'),
+        count: 0,
+        accent: true,
+        disabled: false,
+        run: () => void push()
+      }
+    }
+    if (status.behind > 0) {
+      return {
+        icon: <ArrowDownIcon size={18} />,
+        title: t('rp.pullOrigin'),
+        sub: t('rp.pullSub', { n: status.behind }),
+        count: status.behind,
+        accent: true,
+        disabled: false,
+        run: () => void pull()
+      }
+    }
+    if (status.ahead > 0) {
+      return {
+        icon: <ArrowUpIcon size={18} />,
+        title: t('rp.pushOrigin'),
+        sub: t('rp.pushSub', { n: status.ahead }),
+        count: status.ahead,
+        accent: true,
+        disabled: false,
+        run: () => void push()
+      }
+    }
+    return {
+      icon: <RefreshIcon size={18} />,
+      title: t('rp.fetchOrigin'),
+      sub: status.lastFetch ? t('rp.lastFetched', { time: timeAgo(status.lastFetch) }) : t('rp.neverFetched'),
+      count: 0,
+      accent: false,
+      disabled: false,
+      run: () => void fetchOrigin()
+    }
+  })()
+
+  const busyTitle = busy === 'pull' ? t('rp.pulling') : busy === 'fetch' ? t('rp.fetching') : t('rp.pushing')
+  const percent = progress?.percent ?? null
+  const last = status.lastCommit
 
   return (
     <div className="repo">
@@ -265,72 +455,77 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
           onCreate={() => setCreatingBranch(true)}
           onMerge={() => setMerging(true)}
         />
-        <div className="grow" />
-        {!status.hasRemote && status.hasCommits && (
-          <button className="tool-btn accent" onClick={() => setPublishing(true)}>
-            <UploadIcon size={15} /> Publicar en {account.login}
-          </button>
-        )}
-        {showPrButton &&
-          (branchPr ? (
-            <button className="tool-btn accent" title={branchPr.title} onClick={() => openPr(branchPr.number)}>
-              <PullRequestIcon size={15} /> PR #{branchPr.number}
-            </button>
-          ) : (
-            <button className="tool-btn accent" disabled={!canPr} title={prHint} onClick={() => setCreatingPr(true)}>
-              <PullRequestIcon size={15} /> Crear PR
-            </button>
-          ))}
-        <button className="tool-btn" disabled={!status.upstream || !!busy} onClick={pull}>
-          <ArrowDownIcon size={15} /> {busy === 'pull' ? 'Bajando…' : 'Pull'}{' '}
-          {status.behind > 0 && <b className="count">{status.behind}</b>}
+
+        <button
+          className={`seg sync ${sync.accent && !syncing ? 'accent' : ''} ${syncing ? 'syncing' : ''}`}
+          disabled={sync.disabled || !!busy}
+          onClick={sync.run}
+        >
+          <span className="seg-icon">{sync.icon}</span>
+          <span className="seg-text">
+            <span className="seg-title">{syncing ? busyTitle : sync.title}</span>
+            <span className="seg-caption">
+              {syncing ? (progress ? `${progress.label}${percent !== null ? ` · ${percent}%` : ''}` : '…') : sync.sub}
+            </span>
+          </span>
+          {sync.count > 0 && !syncing && <b className="count">{sync.count}</b>}
+          {syncing && (
+            <span className="sync-track">
+              <span
+                className={`sync-fill ${percent === null ? 'indeterminate' : ''}`}
+                style={percent === null ? undefined : { width: `${percent}%` }}
+              />
+            </span>
+          )}
         </button>
-        {status.hasRemote && !status.upstream ? (
-          <button className="tool-btn accent" disabled={!!busy} title="Sube esta rama a GitHub" onClick={push}>
-            <UploadIcon size={15} /> {busy === 'push' ? 'Subiendo…' : 'Publicar rama'}
-          </button>
-        ) : (
-          <button
-            className={`tool-btn ${status.ahead > 0 ? 'accent' : ''}`}
-            disabled={!status.hasRemote || !!busy}
-            onClick={push}
-          >
-            <ArrowUpIcon size={15} /> {busy === 'push' ? 'Subiendo…' : 'Push'}{' '}
-            {status.ahead > 0 && <b className="count">{status.ahead}</b>}
+
+        <div className="grow" />
+
+        {branchPr && (
+          <button className="seg accent" title={branchPr.title} onClick={() => openPr(branchPr.number)}>
+            <span className="seg-icon">
+              <PullRequestIcon size={18} />
+            </span>
+            <span className="seg-text">
+              <span className="seg-title">{t('rp.prNumber', { n: branchPr.number })}</span>
+              <span className="seg-caption">{t('rp.prNumberSub')}</span>
+            </span>
           </button>
         )}
-        <button className="icon-btn" title="Actualizar" onClick={() => void refresh()}>
+        {canPr && (
+          <button className="seg accent" onClick={() => setCreatingPr(true)}>
+            <span className="seg-icon">
+              <PullRequestIcon size={18} />
+            </span>
+            <span className="seg-text">
+              <span className="seg-title">{t('rp.createPr')}</span>
+              <span className="seg-caption">{t('rp.createPrSub')}</span>
+            </span>
+          </button>
+        )}
+        <button className="icon-btn toolbar-refresh" title={t('rp.refresh')} onClick={() => void refresh()}>
           <RefreshIcon size={15} />
         </button>
       </div>
-
-      {(busy === 'push' || busy === 'pull') && (
-        <ProgressBar progress={progress} fallback={busy === 'push' ? 'Subiendo cambios…' : 'Descargando cambios…'} />
-      )}
 
       {loadError && <div className="banner">{loadError}</div>}
 
       {status.savedChanges && (
         <div className="banner-ok">
-          <span>
-            Dejaste cambios guardados en <b>{status.branch}</b>.
-          </span>
+          <span>{tr('rp.savedChanges', { branch: status.branch ?? '' })}</span>
           <button className="btn small primary" disabled={!!busy} onClick={() => void restore(status.savedChanges!)}>
-            Restaurar cambios
+            {t('rp.restore')}
           </button>
         </div>
       )}
 
       {prPrompt && branchPr && (
         <div className="banner-ok">
-          <span>
-            Subiste cambios a <b>{branch}</b>. Esta rama ya tiene el pull request <b>#{branchPr.number}</b> abierto, y se
-            actualizó solo.
-          </span>
+          <span>{tr('rp.prExisting', { branch: branch ?? '', n: branchPr.number })}</span>
           <button className="btn small primary" onClick={() => openPr(branchPr.number)}>
-            Ver pull request
+            {t('rp.viewPr')}
           </button>
-          <button className="icon-btn" aria-label="Cerrar aviso" onClick={() => setPrPrompt(false)}>
+          <button className="icon-btn" aria-label={t('app.dismiss')} onClick={() => setPrPrompt(false)}>
             ×
           </button>
         </div>
@@ -338,13 +533,11 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
 
       {prPrompt && !branchPr && canPr && (
         <div className="banner-ok">
-          <span>
-            Subiste la rama <b>{branch}</b>. ¿Quieres abrir un pull request?
-          </span>
+          <span>{tr('rp.prOffer', { branch: branch ?? '' })}</span>
           <button className="btn small primary" onClick={() => setCreatingPr(true)}>
-            Crear pull request
+            {t('pr.createTitle')}
           </button>
-          <button className="icon-btn" aria-label="Cerrar aviso" onClick={() => setPrPrompt(false)}>
+          <button className="icon-btn" aria-label={t('app.dismiss')} onClick={() => setPrPrompt(false)}>
             ×
           </button>
         </div>
@@ -352,21 +545,21 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
 
       <div className="tabs">
         <button className={tab === 'changes' ? 'on' : ''} onClick={() => setTab('changes')}>
-          Cambios {files.length > 0 && <span className="pill">{files.length}</span>}
+          {t('rp.tabChanges')} {files.length > 0 && <span className="pill">{files.length}</span>}
         </button>
         <button className={tab === 'history' ? 'on' : ''} onClick={() => setTab('history')}>
-          Historial{' '}
+          {t('rp.tabHistory')}{' '}
           {status.unpushed > 0 && (
-            <span className="pill accent" title={`${status.unpushed} ${status.unpushed === 1 ? 'commit pendiente' : 'commits pendientes'} de subir`}>
+            <span className="pill accent" title={t('rp.pendingTitle', { n: status.unpushed })}>
               {status.unpushed}
             </span>
           )}
         </button>
         <button className={tab === 'tags' ? 'on' : ''} onClick={() => setTab('tags')}>
-          Tags {status.tagCount > 0 && <span className="pill">{status.tagCount}</span>}
+          {t('rp.tabTags')} {status.tagCount > 0 && <span className="pill">{status.tagCount}</span>}
         </button>
         <button className={tab === 'pulls' ? 'on' : ''} onClick={() => setTab('pulls')}>
-          Pull requests {openPrs !== null && openPrs > 0 && <span className="pill">{openPrs >= 50 ? '50+' : openPrs}</span>}
+          {t('rp.tabPulls')} {openPrs !== null && openPrs > 0 && <span className="pill">{openPrs >= 50 ? '50+' : openPrs}</span>}
         </button>
       </div>
 
@@ -376,11 +569,11 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
             <div className="files-head">
               <label className="check-row">
                 <input type="checkbox" checked={allStaged} disabled={files.length === 0} onChange={toggleAll} />
-                <span>{files.length} {files.length === 1 ? 'archivo cambiado' : 'archivos cambiados'}</span>
+                <span>{t('rp.changedFiles', { n: files.length })}</span>
               </label>
             </div>
             <div className="files">
-              {files.length === 0 && <div className="empty-inline">No hay cambios. Todo está al día.</div>}
+              {files.length === 0 && <div className="empty-inline">{t('rp.noChanges')}</div>}
               {files.map((f) => {
                 const { dir, file } = splitPath(f.path)
                 return (
@@ -388,6 +581,11 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
                     key={f.path}
                     className={`file ${selected?.path === f.path ? 'active' : ''}`}
                     onClick={() => setSelectedPath(f.path)}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setSelectedPath(f.path)
+                      setMenu({ x: e.clientX, y: e.clientY, file: f })
+                    }}
                   >
                     <input
                       type="checkbox"
@@ -406,7 +604,8 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
             </div>
             <div className="commit-box">
               <textarea
-                placeholder="Mensaje del commit"
+                placeholder={summary ?? t('rp.commitPlaceholder')}
+                title={summary ? t('rp.commitDefaultHint') : undefined}
                 rows={3}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
@@ -415,12 +614,25 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
                 }}
               />
               <button className="btn primary full" disabled={!canCommit} onClick={commit}>
-                Commit en <b>{status.branch ?? 'HEAD'}</b> {stagedCount > 0 && `(${stagedCount})`}
+                {tr('rp.commitTo', { branch: status.branch ?? 'HEAD', count: stagedCount > 0 ? ` (${stagedCount})` : '' })}
               </button>
             </div>
+            {last?.canUndo && (
+              <div className="undo-row">
+                <span className="undo-text">
+                  <span className="undo-when">{t('rp.lastCommit', { time: timeAgo(last.date) })}</span>
+                  <span className="undo-subject" title={last.subject}>
+                    {last.subject}
+                  </span>
+                </span>
+                <button className="btn small" disabled={!!busy} title={t('rp.undoTitle')} onClick={() => void undo()}>
+                  {t('rp.undo')}
+                </button>
+              </div>
+            )}
           </div>
           <div className="diff-col">
-            {selected ? <DiffView text={diffText} /> : <div className="diff-empty">Elige un archivo para ver los cambios.</div>}
+            {selected ? <DiffView text={diffText} /> : <div className="diff-empty">{t('rp.pickFile')}</div>}
           </div>
         </div>
       )}
@@ -429,7 +641,7 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
         <HistoryView
           projectId={id}
           account={account}
-          refreshKey={`${status.branch}:${status.headHash}:${status.upstream}:${status.ahead}`}
+          refreshKey={`${status.branch}:${status.headHash}:${status.upstream}:${status.ahead}:${status.unpushed}`}
         />
       )}
 
@@ -452,6 +664,27 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
           onChanged={loadOpenPrs}
           initialSelected={focus?.number ?? null}
           key={focus?.at ?? 0}
+        />
+      )}
+
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.file)} onClose={() => setMenu(null)} />}
+
+      {discarding && (
+        <ConfirmModal
+          danger
+          title={t('rp.discardTitle')}
+          body={
+            discarding.length === 1
+              ? tr('rp.discardOne', { name: splitPath(discarding[0].path).file })
+              : t('rp.discardMany', { n: discarding.length })
+          }
+          confirmLabel={t('rp.discardConfirm')}
+          onClose={() => setDiscarding(null)}
+          onConfirm={() => {
+            const list = discarding
+            setDiscarding(null)
+            void discard(list)
+          }}
         />
       )}
 
@@ -506,7 +739,7 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
             setPrPrompt(false)
             setTab('pulls')
             loadOpenPrs()
-            toast(`Pull request #${pr.number} creado`)
+            toast(t('rp.createdPr', { n: pr.number }))
           }}
         />
       )}

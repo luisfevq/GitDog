@@ -14,6 +14,10 @@ export const useToast = (): Notify => useContext(ToastContext)
 
 let nextId = 1
 
+/** Git can print very long errors (a line per file). The toast shows the start; the rest is in the tooltip. */
+const MAX_LENGTH = 280
+const shorten = (text: string): string => (text.length > MAX_LENGTH ? `${text.slice(0, MAX_LENGTH).trimEnd()}…` : text)
+
 export function ToastProvider({ children }: { children: ReactNode }): JSX.Element {
   const [items, setItems] = useState<ToastItem[]>([])
 
@@ -28,8 +32,13 @@ export function ToastProvider({ children }: { children: ReactNode }): JSX.Elemen
       {children}
       <div className="toasts">
         {items.map((t) => (
-          <div key={t.id} className={`toast ${t.kind}`} onClick={() => setItems((l) => l.filter((x) => x.id !== t.id))}>
-            {t.message}
+          <div
+            key={t.id}
+            className={`toast ${t.kind}`}
+            title={t.message.length > MAX_LENGTH ? t.message : undefined}
+            onClick={() => setItems((l) => l.filter((x) => x.id !== t.id))}
+          >
+            {shorten(t.message)}
           </div>
         ))}
       </div>

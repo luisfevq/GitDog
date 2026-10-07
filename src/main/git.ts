@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'child_process'
-import { chmodSync, realpathSync, writeFileSync } from 'fs'
+import { appendFileSync, chmodSync, existsSync, readFileSync, realpathSync, statSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import type {
   BranchInfo,
@@ -8,9 +8,12 @@ import type {
   CommitInfo,
   FileChange,
   GitProgress,
+  LastCommit,
+  PullResult,
   RepoStatus,
   TagInfo
 } from '../shared/types'
+import { t } from './lang'
 
 /** Credentials of the account that owns a project. Passed per command, never written to disk. */
 export interface Auth {
@@ -149,7 +152,7 @@ export function gitProgress(
         .join('\n')
         .trim()
       if (secret) message = message.split(secret).join('***')
-      reject(new Error(message || 'Error desconocido de git'))
+      reject(new Error(message || t('err.gitUnknown')))
     })
   })
 }
@@ -171,12 +174,31 @@ function parseBranchHeader(raw: string): Pick<RepoStatus, 'branch' | 'upstream' 
   return { branch, upstream: upstream ?? null, ahead, behind }
 }
 
+function parseLastCommit(output: string, hasRemote: boolean, unpushed: number): LastCommit | null {
+  const [hash, subject, date, parents] = output.trim().split('\x1f')
+  if (!hash) return null
+  const parentCount = (parents ?? '').split(' ').filter(Boolean).length
+  // Without a remote nothing can be "pushed", so every commit counts as local.
+  const local = hasRemote ? unpushed > 0 : true
+  return { hash, subject, date, canUndo: parentCount === 1 && local }
+}
+
+/** When the project last talked to GitHub: the modification time of .git/FETCH_HEAD. */
+function fetchedAt(cwd: string): string | null {
+  try {
+    return statSync(join(cwd, '.git', 'FETCH_HEAD')).mtime.toISOString()
+  } catch {
+    return null
+  }
+}
+
 export async function status(cwd: string): Promise<RepoStatus> {
-  const [{ stdout }, head, remote, tagList] = await Promise.all([
+  const [{ stdout }, head, remote, tagList, lastLog] = await Promise.all([
     git(cwd, ['status', '--porcelain=v1', '-z', '-b', '--untracked-files=all']),
     git(cwd, ['rev-parse', '-q', '--verify', 'HEAD'], { okCodes: [0, 1, 128] }),
     git(cwd, ['config', '--get', 'remote.origin.url'], { okCodes: [0, 1] }),
-    git(cwd, ['tag', '--list'])
+    git(cwd, ['tag', '--list']),
+    git(cwd, ['log', '-1', '--format=%H%x1f%s%x1f%aI%x1f%P'], { okCodes: [0, 128] })
   ])
 
   const parts = stdout.split('\0')
@@ -219,6 +241,8 @@ export async function status(cwd: string): Promise<RepoStatus> {
     hasRemote,
     remoteUrl: remote.stdout.trim() || null,
     unpushed: Number(unpushed.stdout.trim()) || 0,
+    lastCommit: parseLastCommit(lastLog.stdout, hasRemote, Number(unpushed.stdout.trim()) || 0),
+    lastFetch: fetchedAt(cwd),
     savedChanges,
     tagCount: tagList.stdout.split('\n').filter(Boolean).length,
     files
@@ -265,9 +289,20 @@ export async function push(cwd: string, auth: Auth, onProgress: (p: Progress) =>
   return (stderr || stdout).trim()
 }
 
-export async function pull(cwd: string, auth: Auth, onProgress: (p: Progress) => void = () => undefined): Promise<string> {
+export async function pull(
+  cwd: string,
+  auth: Auth,
+  onProgress: (p: Progress) => void = () => undefined
+): Promise<PullResult> {
   const { stdout, stderr } = await gitProgress(cwd, ['pull', '--ff-only', '--progress'], { auth }, onProgress)
-  return (stdout || stderr).trim()
+  const output = `${stdout}\n${stderr}`
+  if (/Already up[ -]to[ -]date/i.test(output)) return { upToDate: true, files: null }
+  const changed = output.match(/(\d+) files? changed/)
+  return { upToDate: false, files: changed ? Number(changed[1]) : null }
+}
+
+export async function fetchRemote(cwd: string, auth: Auth, onProgress: (p: Progress) => void = () => undefined): Promise<void> {
+  await gitProgress(cwd, ['fetch', '--prune', '--progress', 'origin'], { auth }, onProgress)
 }
 
 export async function branches(cwd: string): Promise<BranchInfo[]> {
@@ -360,8 +395,10 @@ export async function mergeBranch(cwd: string, branch: string, identity: Auth): 
     await git(cwd, ['merge', '--abort'], { okCodes: [0, 128] })
     const shown = conflicted.slice(0, 5).join(', ')
     throw new Error(
-      `Hay conflictos al hacer merge de ${branch}${shown ? ` (${shown}${conflicted.length > 5 ? ', …' : ''})` : ''}. ` +
-        'El merge se canceló y tus archivos quedaron como estaban. Resuelve los conflictos con otra herramienta.'
+      t('err.mergeConflicts', {
+        branch,
+        files: shown ? ` (${shown}${conflicted.length > 5 ? ', …' : ''})` : ''
+      })
     )
   }
 }
@@ -486,4 +523,64 @@ export async function createBranchFrom(cwd: string, name: string, base: string |
   }
   const start = (await refExists(cwd, `refs/heads/${base}`)) ? base : `origin/${base}`
   await git(cwd, ['checkout', '-b', name, '--no-track', start])
+}
+
+/**
+ * Discards the changes of some files. Nothing is lost for good: the current version of each file goes
+ * to the Trash (through `trash`) before it is restored from the last commit.
+ */
+export async function discardFiles(
+  cwd: string,
+  files: FileChange[],
+  trash: (absolutePath: string) => Promise<void>
+): Promise<void> {
+  const hasHead = (await git(cwd, ['rev-parse', '-q', '--verify', 'HEAD'], { okCodes: [0, 1, 128] })).code === 0
+  const inHead = async (path: string): Promise<boolean> =>
+    hasHead && (await git(cwd, ['cat-file', '-e', `HEAD:${path}`], { okCodes: [0, 1, 128] })).code === 0
+
+  for (const file of files) {
+    const absolute = join(cwd, file.path)
+    const exists = existsSync(absolute)
+
+    // A new file: forget it in Git and send it to the Trash.
+    if (file.untracked || !(await inHead(file.orig ?? file.path))) {
+      if (!file.untracked) await git(cwd, ['rm', '--cached', '-f', '-r', '--', file.path], { okCodes: [0, 128] })
+      if (exists) await trash(absolute)
+      continue
+    }
+    // A rename: the new name goes away and the old file comes back.
+    if (file.orig) {
+      await git(cwd, ['rm', '--cached', '-f', '--', file.path], { okCodes: [0, 128] })
+      if (exists) await trash(absolute)
+      await git(cwd, ['checkout', 'HEAD', '--', file.orig])
+      continue
+    }
+    if (exists && file.status !== 'D') await trash(absolute)
+    await git(cwd, ['checkout', 'HEAD', '--', file.path])
+  }
+}
+
+/** Adds a line to .gitignore unless it is already there. */
+export function ignorePattern(cwd: string, pattern: string): void {
+  const line = pattern.trim()
+  if (!line || /[\r\n]/.test(pattern) || line.startsWith('#')) throw new Error(t('err.badPattern'))
+  const file = join(cwd, '.gitignore')
+  const current = existsSync(file) ? readFileSync(file, 'utf8') : ''
+  if (current.split(/\r?\n/).includes(line)) return
+  appendFileSync(file, `${current && !current.endsWith('\n') ? '\n' : ''}${line}\n`)
+}
+
+/** Undoes the last commit but keeps its changes (soft reset). Returns the commit message. */
+export async function undoLastCommit(cwd: string): Promise<string> {
+  const { stdout } = await git(cwd, ['log', '-1', '--format=%P%x1f%B'])
+  const [parents, message] = stdout.split('\x1f')
+  if (parents.trim().split(/\s+/).filter(Boolean).length !== 1) throw new Error(t('err.undoNotAllowed'))
+  if (await remoteUrl(cwd)) {
+    const pending = Number(
+      (await git(cwd, ['rev-list', '--count', 'HEAD', '--not', '--remotes=origin'], { okCodes: [0, 128] })).stdout.trim()
+    )
+    if (!pending) throw new Error(t('err.undoPushed'))
+  }
+  await git(cwd, ['reset', '--soft', 'HEAD~1'])
+  return (message ?? '').trim()
 }

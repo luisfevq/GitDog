@@ -1,4 +1,5 @@
 import type { Account, Project } from '@shared/types'
+import { useI18n } from '../i18n'
 import { CloneIcon, CloseIcon, FolderIcon, MailIcon, PlusIcon } from './Icons'
 
 const CONTACT = 'mailto:luisfevq+gitdog@gmail.com?subject=GitDog'
@@ -14,11 +15,12 @@ interface Props {
 }
 
 export function Sidebar({ account, projects, selectedId, onSelect, onAddLocal, onClone, onRemove }: Props): JSX.Element {
+  const { t, tr } = useI18n()
   return (
     <aside className="sidebar">
       <div className="sidebar-drag" />
       <div className="sidebar-title">
-        <span>Proyectos</span>
+        <span>{t('side.projects')}</span>
         {account && <small>{account.login}</small>}
       </div>
 
@@ -29,33 +31,33 @@ export function Sidebar({ account, projects, selectedId, onSelect, onAddLocal, o
               <FolderIcon size={15} />
               <span>{p.name}</span>
             </button>
-            <button className="icon-btn project-x" title="Quitar de la lista" onClick={() => onRemove(p)}>
+            <button className="icon-btn project-x" title={t('app.removeProjectTitle')} onClick={() => onRemove(p)}>
               <CloseIcon size={13} />
             </button>
           </div>
         ))}
-        {account && projects.length === 0 && <div className="sidebar-empty">Aún no hay proyectos en esta cuenta.</div>}
+        {account && projects.length === 0 && <div className="sidebar-empty">{t('side.empty')}</div>}
       </nav>
 
       {account && (
         <div className="sidebar-actions">
           <button className="side-btn" onClick={onAddLocal}>
-            <PlusIcon size={15} /> Carpeta local
+            <PlusIcon size={15} /> {t('side.localFolder')}
           </button>
           <button className="side-btn" onClick={onClone}>
-            <CloneIcon size={15} /> Clonar repositorio
+            <CloneIcon size={15} /> {t('app.cloneRepo')}
           </button>
         </div>
       )}
 
       <button
         className="credit"
-        title="Escribir a Luis Felipe (luisfevq+gitdog@gmail.com)"
+        title={t('side.creditTitle')}
         onClick={() => void window.api.openExternal(CONTACT)}
       >
         <span>
-          GitDog · por <b>Luis Felipe</b>
-          <small>Desarrollador</small>
+          {tr('side.creditBy')}
+          <small>{t('side.developer')}</small>
         </span>
         <MailIcon size={15} />
       </button>

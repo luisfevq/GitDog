@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Project, PullRequest } from '@shared/types'
+import { useI18n } from '../i18n'
 import { Modal } from './Modal'
 import { useToast } from './Toast'
 
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export function CreatePrModal({ project, head, ahead, onClose, onCreated }: Props): JSX.Element {
+  const { t } = useI18n()
   const toast = useToast()
   const id = project.id
 
@@ -75,16 +77,16 @@ export function CreatePrModal({ project, head, ahead, onClose, onCreated }: Prop
 
   return (
     <Modal
-      title="Crear pull request"
+      title={t('pr.createTitle')}
       wide
       onClose={onClose}
       footer={
         <>
           <button className="btn" onClick={onClose}>
-            Cancelar
+            {t('common.cancel')}
           </button>
           <button className="btn primary" disabled={!title.trim() || !base || busy} onClick={create}>
-            {busy ? 'Creando…' : draft ? 'Crear borrador' : 'Crear pull request'}
+            {busy ? t('pr.creating') : draft ? t('pr.createDraft') : t('pr.createTitle')}
           </button>
         </>
       }
@@ -94,8 +96,8 @@ export function CreatePrModal({ project, head, ahead, onClose, onCreated }: Prop
       <div className="pr-route">
         <code>{head}</code>
         <span>→</span>
-        <select value={base} disabled={!branches} onChange={(e) => setBase(e.target.value)} aria-label="Rama destino">
-          {!branches && <option>Cargando…</option>}
+        <select value={base} disabled={!branches} onChange={(e) => setBase(e.target.value)} aria-label={t('pr.targetBranch')}>
+          {!branches && <option>{t('common.loading')}</option>}
           {branches?.map((b) => (
             <option key={b} value={b}>
               {b}
@@ -105,19 +107,13 @@ export function CreatePrModal({ project, head, ahead, onClose, onCreated }: Prop
       </div>
       {commits !== null && base && (
         <p className="hint">
-          {commits === 0
-            ? `La rama ${head} no tiene commits que ${base} no tenga todavía.`
-            : `${commits} ${commits === 1 ? 'commit' : 'commits'} de ${head} no están en ${base}.`}
+          {commits === 0 ? t('pr.noNewCommits', { head, base }) : t('pr.newCommits', { n: commits, head, base })}
         </p>
       )}
-      {ahead > 0 && (
-        <p className="hint warn-text">
-          Tienes {ahead} {ahead === 1 ? 'commit' : 'commits'} sin subir. Haz Push primero para incluirlos.
-        </p>
-      )}
+      {ahead > 0 && <p className="hint warn-text">{t('pr.unpushed', { n: ahead })}</p>}
 
       <label className="field">
-        <span>Título</span>
+        <span>{t('pr.title')}</span>
         <input
           autoFocus
           value={title}
@@ -128,7 +124,7 @@ export function CreatePrModal({ project, head, ahead, onClose, onCreated }: Prop
         />
       </label>
       <label className="field">
-        <span>Descripción (opcional)</span>
+        <span>{t('pr.description')}</span>
         <textarea
           rows={7}
           value={body}
@@ -140,7 +136,7 @@ export function CreatePrModal({ project, head, ahead, onClose, onCreated }: Prop
       </label>
       <label className="check-row">
         <input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} />
-        <span>Crear como borrador</span>
+        <span>{t('pr.asDraft')}</span>
       </label>
     </Modal>
   )

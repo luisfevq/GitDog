@@ -1,3 +1,5 @@
+import type { Lang } from './i18n'
+
 export interface Account {
   login: string
   id: number
@@ -52,9 +54,28 @@ export interface RepoStatus {
   headHash: string | null
   /** Commits of this branch that are not on GitHub yet */
   unpushed: number
+  /** Last commit of the branch, for the "undo" shortcut */
+  lastCommit: LastCommit | null
+  /** ISO date of the last fetch or pull, from .git/FETCH_HEAD */
+  lastFetch: string | null
   /** Stash ref (stash@{n}) of changes left on this branch with "leave my changes" */
   savedChanges: string | null
   files: FileChange[]
+}
+
+export interface LastCommit {
+  hash: string
+  subject: string
+  /** ISO date */
+  date: string
+  /** Not pushed, not a merge, and not the first commit of the project */
+  canUndo: boolean
+}
+
+export interface PullResult {
+  upToDate: boolean
+  /** Number of files git reported as changed, when it said so */
+  files: number | null
 }
 
 export interface BranchInfo {
@@ -155,7 +176,6 @@ export interface PullDetail extends PullRequest {
 
 export interface MergeEmail {
   email: string
-  label: string
   kind: 'private' | 'primary' | 'verified'
 }
 
@@ -240,7 +260,16 @@ export interface Api {
   unstage(id: string, paths: string[]): Promise<void>
   commit(id: string, message: string): Promise<void>
   push(id: string): Promise<string>
-  pull(id: string): Promise<string>
+  pull(id: string): Promise<PullResult>
+  /** Looks for new commits on GitHub without changing any file */
+  fetch(id: string): Promise<void>
+  /** Sends the files to the Trash (a copy of modified ones too) and restores them from the last commit */
+  discardChanges(id: string, files: FileChange[]): Promise<void>
+  /** Adds a line to the project's .gitignore */
+  ignorePattern(id: string, pattern: string): Promise<void>
+  /** Undoes the last commit and keeps its changes. Returns the commit message. */
+  undoCommit(id: string): Promise<string>
+  setLanguage(lang: Lang): Promise<void>
   branches(id: string): Promise<BranchInfo[]>
   /** leaveChanges: stash local changes on the current branch first instead of carrying them over */
   switchBranch(id: string, branch: string, leaveChanges: boolean): Promise<void>
@@ -303,6 +332,11 @@ export const API_METHODS: (keyof Api)[] = [
   'commit',
   'push',
   'pull',
+  'fetch',
+  'discardChanges',
+  'ignorePattern',
+  'undoCommit',
+  'setLanguage',
   'branches',
   'switchBranch',
   'createBranch',
