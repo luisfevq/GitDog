@@ -147,8 +147,8 @@ Los instaladores no se suben al código del repositorio (`dist/` está en `.giti
 3. Crea el release y adjunta los dos `.dmg`. Con la CLI de GitHub:
 
    ```bash
-   gh release create v1.0.2 dist/GitDog-1.0.2-arm64.dmg dist/GitDog-1.0.2-x64.dmg \
-     --title "GitDog 1.0.2" --generate-notes
+   gh release create v1.1.0 dist/GitDog-1.1.0-arm64.dmg dist/GitDog-1.1.0-x64.dmg \
+     --title "GitDog 1.1.0" --generate-notes
    ```
 
    También puedes hacerlo desde la web: **Releases** → **Draft a new release** → arrastra los dos archivos.

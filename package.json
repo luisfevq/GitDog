@@ -1,7 +1,7 @@
 {
   "name": "gitdog",
   "productName": "GitDog",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "description": "Cliente Git de escritorio con varias cuentas de GitHub",
   "main": "./out/main/index.js",
   "scripts": {
