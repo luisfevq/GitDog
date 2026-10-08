@@ -8,6 +8,10 @@ import type {
   Repo,
   ReviewEvent
 } from '../shared/types'
+import { createReadStream, statSync } from 'fs'
+import http from 'http'
+import https from 'https'
+import { basename, extname } from 'path'
 import { t } from './lang'
 
 const API = 'https://api.github.com'
@@ -394,5 +398,113 @@ export async function mergePullWithEmail(
   const body = (await res.json().catch(() => ({}))) as { errors?: { message: string }[]; message?: string }
   if (!res.ok || body.errors?.length) {
     throw new Error(`GitHub: ${body.errors?.[0]?.message ?? body.message ?? t('err.githubReplied', { status: res.status })}`)
+  }
+}
+
+/** Creates a release as a draft: the tag is not created and nobody sees it until it is published. */
+export async function createDraftRelease(
+  token: string,
+  owner: string,
+  repo: string,
+  input: { tag: string; name: string; body: string; generate: boolean; prerelease: boolean }
+): Promise<{ id: number; uploadUrl: string; htmlUrl: string }> {
+  const r = await request<{ id: number; upload_url: string; html_url: string }>(token, `${repoPath(owner, repo)}/releases`, {
+    method: 'POST',
+    body: JSON.stringify({
+      tag_name: input.tag,
+      name: input.name,
+      body: input.body || undefined,
+      draft: true,
+      prerelease: input.prerelease,
+      generate_release_notes: input.generate
+    })
+  })
+  // upload_url comes as a template: ".../assets{?name,label}"
+  return { id: r.id, uploadUrl: r.upload_url.replace(/\{.*$/, ''), htmlUrl: r.html_url }
+}
+
+export async function publishRelease(token: string, owner: string, repo: string, id: number): Promise<string> {
+  const r = await request<{ html_url: string }>(token, `${repoPath(owner, repo)}/releases/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ draft: false })
+  })
+  return r.html_url
+}
+
+export async function deleteRelease(token: string, owner: string, repo: string, id: number): Promise<void> {
+  await request(token, `${repoPath(owner, repo)}/releases/${id}`, { method: 'DELETE' })
+}
+
+const CONTENT_TYPES: Record<string, string> = {
+  '.dmg': 'application/x-apple-diskimage',
+  '.zip': 'application/zip',
+  '.pkg': 'application/octet-stream',
+  '.json': 'application/json',
+  '.yml': 'text/yaml',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown'
+}
+
+/** Streams a file to a release. `onBytes` reports how much was read so far, for a progress bar. */
+export function uploadAsset(
+  token: string,
+  uploadUrl: string,
+  filePath: string,
+  onBytes: (sent: number, total: number) => void
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const total = statSync(filePath).size
+    const url = new URL(uploadUrl)
+    url.searchParams.set('name', basename(filePath))
+    const transport = url.protocol === 'http:' ? http : https
+
+    const req = transport.request(
+      url,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'GitDog',
+          'Content-Type': CONTENT_TYPES[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
+          'Content-Length': total
+        }
+      },
+      (res) => {
+        let body = ''
+        res.on('data', (chunk: Buffer) => (body += chunk.toString()))
+        res.on('end', () => {
+          if (res.statusCode && res.statusCode < 300) return resolve()
+          let detail = ''
+          try {
+            const parsed = JSON.parse(body) as { message?: string; errors?: { code?: string }[] }
+            detail = [parsed.message, ...(parsed.errors ?? []).map((e) => e.code)].filter(Boolean).join(' - ')
+          } catch {
+            /* no JSON body */
+          }
+          reject(new Error(t('err.githubStatus', { status: res.statusCode ?? 0, detail: detail ? `: ${detail}` : '' })))
+        })
+      }
+    )
+    req.on('error', reject)
+
+    let sent = 0
+    const stream = createReadStream(filePath)
+    stream.on('data', (chunk: string | Buffer) => {
+      sent += chunk.length
+      onBytes(sent, total)
+    })
+    stream.on('error', reject)
+    stream.pipe(req)
+  })
+}
+
+/** True when a published release already uses this tag. Any error counts as "no": creating it will say more. */
+export async function releaseExists(token: string, owner: string, repo: string, tag: string): Promise<boolean> {
+  try {
+    await request(token, `${repoPath(owner, repo)}/releases/tags/${encodeURIComponent(tag)}`)
+    return true
+  } catch {
+    return false
   }
 }

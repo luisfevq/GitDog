@@ -10,7 +10,8 @@ const RANGES: Record<string, [number, number]> = {
   'Writing objects': [35, 100],
   'Receiving objects': [0, 80],
   'Resolving deltas': [80, 100],
-  'Checking connectivity': [95, 100]
+  'Checking connectivity': [95, 100],
+  'Uploading release asset': [0, 100]
 }
 
 const LABEL_KEYS = {
@@ -20,7 +21,8 @@ const LABEL_KEYS = {
   'Writing objects': 'pg.writing',
   'Receiving objects': 'pg.receiving',
   'Resolving deltas': 'pg.resolving',
-  'Checking connectivity': 'pg.verifying'
+  'Checking connectivity': 'pg.verifying',
+  'Uploading release asset': 'pg.asset'
 } as const
 
 export interface ProgressView {

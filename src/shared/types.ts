@@ -233,6 +233,25 @@ export interface CreatePullInput {
   draft: boolean
 }
 
+export interface ReleaseInput {
+  tag: string
+  title: string
+  notes: string
+  /** Add GitHub's automatic notes (list of merged pull requests) */
+  generateNotes: boolean
+  /** Save as a draft instead of publishing */
+  draft: boolean
+  prerelease: boolean
+  /** Absolute paths chosen with chooseFiles */
+  files: string[]
+}
+
+export interface ReleaseResult {
+  url: string
+  published: boolean
+  uploaded: number
+}
+
 export interface PublishOptions {
   name: string
   description: string
@@ -318,6 +337,11 @@ export interface Api {
   mergePull(id: string, number: number, method: MergeMethod, deleteBranch: boolean, email: string | null): Promise<string>
   mergeEmails(id: string): Promise<MergeEmails>
 
+  /** File picker for release attachments. Only the paths it returns can be uploaded. */
+  chooseFiles(defaultDir: string | null): Promise<string[]>
+  /** Creates a release as a draft, uploads the files, and publishes it unless input.draft is set */
+  createRelease(id: string, input: ReleaseInput): Promise<ReleaseResult>
+
   openExternal(url: string): Promise<void>
   revealInFinder(path: string): Promise<void>
 }
@@ -378,6 +402,8 @@ export const API_METHODS: (keyof Api)[] = [
   'reviewPull',
   'mergePull',
   'mergeEmails',
+  'chooseFiles',
+  'createRelease',
   'openExternal',
   'revealInFinder'
 ]

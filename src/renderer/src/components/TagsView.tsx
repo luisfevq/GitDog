@@ -5,6 +5,7 @@ import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
 import { ExternalIcon, UploadIcon } from './Icons'
 import { Modal } from './Modal'
+import { ReleaseModal } from './ReleaseModal'
 import { useToast } from './Toast'
 
 interface Props {
@@ -29,6 +30,7 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
   const [busy, setBusy] = useState(false)
   const [deleting, setDeleting] = useState<TagInfo | null>(null)
   const [alsoRemote, setAlsoRemote] = useState(false)
+  const [releaseFor, setReleaseFor] = useState<string | null>(null)
 
   const load = useCallback(async (): Promise<void> => {
     try {
@@ -83,6 +85,11 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
           <button className="btn primary" disabled={!name.trim() || busy || !hasCommits} onClick={create}>
             {t('tg.create')}
           </button>
+          {web && hasRemote && (
+            <button className="btn" onClick={() => setReleaseFor('')}>
+              {t('rl.button')}
+            </button>
+          )}
         </div>
         <input
           placeholder={t('tg.messagePlaceholder')}
@@ -137,6 +144,11 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
                 <UploadIcon size={13} /> {t('tg.push')}
               </button>
             )}
+            {web && hasRemote && (
+              <button className="btn small" onClick={() => setReleaseFor(tg.name)}>
+                {t('rl.rowButton')}
+              </button>
+            )}
             <button
               className="link-danger"
               onClick={() => {
@@ -149,6 +161,19 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
           </div>
         ))}
       </div>
+
+      {releaseFor !== null && (
+        <ReleaseModal
+          project={project}
+          tags={tags ?? []}
+          initialTag={releaseFor}
+          onClose={() => setReleaseFor(null)}
+          onDone={() => {
+            void load()
+            onChanged()
+          }}
+        />
+      )}
 
       {deleting && (
         <Modal

@@ -143,6 +143,27 @@ export const err = {
     es: 'Solo puedes modificar un commit que todavía no se subió.',
     en: 'You can only amend a commit that has not been pushed yet.'
   },
+  'err.releaseTag': { es: 'Escribe el tag del release.', en: 'Write the tag of the release.' },
+  'err.releaseFile': {
+    es: 'Archivo no permitido. Elígelo con "Añadir archivos…".',
+    en: 'File not allowed. Pick it with "Add files…".'
+  },
+  'err.releaseTooBig': {
+    es: 'El archivo {name} pesa más de 2 GB, el máximo de GitHub.',
+    en: 'The file {name} is larger than 2 GB, the GitHub maximum.'
+  },
+  'err.releaseExists': {
+    es: 'Ya existe un release para el tag {tag}.',
+    en: 'A release for the tag {tag} already exists.'
+  },
+  'err.releaseUpload': {
+    es: 'No se pudo subir {name}: {reason}. No se creó el release.',
+    en: 'Could not upload {name}: {reason}. The release was not created.'
+  },
+  'err.releasePublish': {
+    es: 'Los archivos se subieron, pero no se pudo publicar: {reason}. El release quedó como borrador en GitHub.',
+    en: 'The files were uploaded, but publishing failed: {reason}. The release was left as a draft on GitHub.'
+  },
   'err.badPattern': { es: 'Patrón no válido.', en: 'Invalid pattern.' },
   'err.noFilesToDiscard': { es: 'No hay archivos que descartar.', en: 'There are no files to discard.' }
 } satisfies Record<string, Entry>

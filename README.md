@@ -24,6 +24,7 @@
 - **Ramas**: lista con la fecha del último commit y buscador. Una rama nueva se publica con **Publicar rama**, y se puede hacer merge de otra rama en la actual.
 - **Cambios pendientes**: al cambiar de rama con cambios, pregunta si los dejas o los llevas. Al crear una rama, pregunta si sale de la actual o de `main`.
 - **Tags**: crear (simples o anotados), subir, eliminar.
+- **Releases**: crear un release de GitHub desde la pestaña Tags, con título, notas, archivos adjuntos (el `.dmg`) y barra de progreso. Se crea primero como borrador y solo se publica cuando los archivos ya están subidos.
 - **Pull requests**: ver la lista, los archivos con su diff y la conversación. Crear PRs, dejar revisiones (aprobar, comentar, solicitar cambios) y hacer merge. Si la rama ya tiene un PR abierto, un push lo actualiza y la barra muestra **PR #n** en vez de ofrecer crear otro.
 - **Español e inglés**: se elige en el menú de la cuenta, arriba a la derecha. Por defecto usa el idioma del sistema.
 - **Versiones nuevas**: al abrir, y cada 6 horas, GitDog busca el último Release del repositorio y avisa si hay una versión más reciente. Si cierras el aviso, vuelve a aparecer a las 6 horas.
@@ -142,11 +143,13 @@ Los instaladores no se suben al código del repositorio (`dist/` está en `.giti
 3. Crea el release y adjunta el `.dmg`. Con la CLI de GitHub:
 
    ```bash
-   gh release create v1.1.0 dist/GitDog-1.1.0-arm64.dmg \
-     --title "GitDog 1.1.0" --generate-notes
+   gh release create v1.2.0 dist/GitDog-1.2.0-arm64.dmg \
+     --title "GitDog 1.2.0" --generate-notes
    ```
 
    También puedes hacerlo desde la web: **Releases** → **Draft a new release** → arrastra el archivo.
+
+   O desde GitDog, con la cuenta del proyecto: pestaña **Tags** → **Crear release…** → escribe el tag (por ejemplo `v1.2.0`), añade el `.dmg` de `dist/` y pulsa **Publicar release**. Si el tag solo existe en tu Mac, GitDog lo sube antes; si no existe, GitHub lo crea en el último commit de la rama principal.
 
 ### Cómo funciona
 

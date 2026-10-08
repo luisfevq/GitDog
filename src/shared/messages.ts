@@ -3,6 +3,7 @@ import { accounts } from './locales/accounts'
 import { app } from './locales/app'
 import { branches } from './locales/branches'
 import { prs } from './locales/prs'
+import { release } from './locales/release'
 import { repo } from './locales/repo'
 import { repoview } from './locales/repoview'
 import { commits } from './locales/commits'
@@ -17,6 +18,7 @@ export const messages = {
   ...branches,
   ...commits,
   ...prs,
+  ...release,
   ...repo,
   ...repoview,
   ...err

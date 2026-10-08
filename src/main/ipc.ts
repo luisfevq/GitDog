@@ -11,6 +11,7 @@ import * as github from './github'
 import * as oauth from './oauth'
 import { LANGS } from '../shared/i18n'
 import { setLang, t } from './lang'
+import { runRelease } from './release'
 import { checkForUpdate } from './update'
 import { deleteToken, getConfig, getToken, saveConfig, setToken } from './store'
 
@@ -126,6 +127,10 @@ function requireActive(): string {
 let login: { start: oauth.DeviceStart; controller: AbortController } | null = null
 
 const hex = /^[0-9a-f]{7,40}$/
+
+/** Files the user picked for a release. Nothing else can be uploaded from the window. */
+const pickedFiles = new Set<string>()
+const MAX_ASSET_BYTES = 2 * 1024 * 1024 * 1024
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
   /** Sends git's progress to the window, at most about 15 times a second. */
@@ -517,6 +522,50 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         limited = true
       }
       return { options, limited }
+    },
+
+    async chooseFiles(defaultDir) {
+      const win = getWindow()
+      const options = {
+        properties: ['openFile', 'multiSelections'] as ('openFile' | 'multiSelections')[],
+        defaultPath: defaultDir && existsSync(defaultDir) ? defaultDir : undefined
+      }
+      const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+      if (result.canceled) return []
+      result.filePaths.forEach((p) => pickedFiles.add(p))
+      return result.filePaths
+    },
+
+    async createRelease(id, input) {
+      const { project, auth } = context(id)
+      const { owner, repo } = repoRef(project)
+      const tag = input.tag.trim()
+      if (!tag) throw new Error(t('err.releaseTag'))
+      checkTagName(tag)
+
+      for (const file of input.files) {
+        if (!pickedFiles.has(file) || !existsSync(file) || !statSync(file).isFile()) throw new Error(t('err.releaseFile'))
+        if (statSync(file).size > MAX_ASSET_BYTES) throw new Error(t('err.releaseTooBig', { name: basename(file) }))
+      }
+
+      const known = (await git.tags(project.path, auth)).find((x) => x.name === tag)
+      const report = progressSender(id)
+
+      return runRelease({
+        token: auth.token,
+        owner,
+        repo,
+        tag,
+        title: input.title,
+        notes: input.notes,
+        generateNotes: input.generateNotes,
+        draft: input.draft,
+        prerelease: input.prerelease,
+        files: input.files,
+        // Only a tag that exists on this Mac alone needs to be pushed first.
+        pushTagFirst: known && known.onRemote === false ? () => git.pushTag(project.path, tag, auth) : null,
+        onProgress: (percent) => report({ phase: 'Uploading release asset', percent })
+      })
     },
 
     async openExternal(url) {

@@ -2235,3 +2235,33 @@ select:focus {
   padding: 6px 10px;
   color: var(--text-2);
 }
+
+/* ---------- Release dialog ---------- */
+
+.release-files {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  margin: 6px 0 8px;
+}
+
+.release-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.release-file .file-path {
+  flex: 1;
+  min-width: 0;
+}
+
+.field > .btn {
+  align-self: flex-start;
+}
