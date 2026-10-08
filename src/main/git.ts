@@ -441,7 +441,7 @@ export async function tags(cwd: string, auth: Auth): Promise<TagInfo[]> {
   const { stdout } = await git(cwd, [
     'tag',
     '--sort=-creatordate',
-    '--format=%(refname:short)%1f%(objectname:short)%1f%(creatordate:iso-strict)%1f%(contents:subject)%1f%(objecttype)'
+    '--format=%(refname:short)%1f%(if)%(*objectname:short)%(then)%(*objectname:short)%(else)%(objectname:short)%(end)%1f%(creatordate:iso-strict)%1f%(contents:subject)%1f%(objecttype)'
   ])
 
   let remote: Set<string> | null = null

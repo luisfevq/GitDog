@@ -108,11 +108,13 @@ interface TagProps {
   sha: string
   subject: string
   hasRemote: boolean
+  /** The commit is not on GitHub yet */
+  unpushed: boolean
   onClose: () => void
   onConfirm: (name: string, message: string, push: boolean) => void
 }
 
-export function TagFromCommitModal({ sha, subject, hasRemote, onClose, onConfirm }: TagProps): JSX.Element {
+export function TagFromCommitModal({ sha, subject, hasRemote, unpushed, onClose, onConfirm }: TagProps): JSX.Element {
   const { t } = useI18n()
   const [name, setName] = useState('')
   const [message, setMessage] = useState('')
@@ -151,6 +153,7 @@ export function TagFromCommitModal({ sha, subject, hasRemote, onClose, onConfirm
         <span>{t('tg.pushOnCreate')}</span>
       </label>
       {!hasRemote && <p className="hint">{t('tg.needRemote')}</p>}
+      {hasRemote && unpushed && <div className="banner-warn">{t('tg.warnCommitUnpushed')}</div>}
     </Modal>
   )
 }

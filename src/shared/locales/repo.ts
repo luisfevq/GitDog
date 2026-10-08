@@ -9,9 +9,21 @@ export const repo = {
     en: 'Message (optional). With a message, an annotated tag is created.'
   },
   'tg.pushOnCreate': { es: 'Subir a GitHub al crearlo', en: 'Push to GitHub when created' },
-  'tg.at': {
-    es: 'El tag se crea en el último commit de la rama actual.',
-    en: 'The tag is created on the latest commit of the current branch.'
+  'tg.target': {
+    es: 'Se creará en <b>{branch}</b> · <code>{hash}</code> · {subject}',
+    en: 'It will be created on <b>{branch}</b> · <code>{hash}</code> · {subject}'
+  },
+  'tg.warnBranch': {
+    es: 'Estás en <b>{branch}</b>, no en <b>{default}</b>. Los releases suelen salir de la rama principal.',
+    en: 'You are on <b>{branch}</b>, not on <b>{default}</b>. Releases usually come from the default branch.'
+  },
+  'tg.warnUnpushed': {
+    es: 'Este commit todavía no está en GitHub ({n} {n?commit sin subir|commits sin subir} en total). Si subes el tag, el commit sube con él, pero queda sin rama.',
+    en: 'This commit is not on GitHub yet ({n} unpushed {n?commit|commits} in total). If you push the tag, the commit goes with it, but it belongs to no branch.'
+  },
+  'tg.warnCommitUnpushed': {
+    es: 'Este commit todavía no está en GitHub. Si subes el tag, el commit sube con él, pero queda sin rama.',
+    en: 'This commit is not on GitHub yet. If you push the tag, the commit goes with it, but it belongs to no branch.'
   },
   'tg.needCommit': { es: 'Haz un commit antes de crear un tag.', en: 'Make a commit before creating a tag.' },
   'tg.needRemote': {

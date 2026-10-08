@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { Project, TagInfo } from '@shared/types'
+import type { Project, TagInfo, TagTarget } from '@shared/types'
 import { githubWebUrl } from '@shared/github-url'
 import { useI18n } from '../i18n'
 import { timeAgo } from '../lib/time'
@@ -17,7 +17,7 @@ interface Props {
 }
 
 export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged }: Props): JSX.Element {
-  const { t } = useI18n()
+  const { t, tr } = useI18n()
   const toast = useToast()
   const id = project.id
   const web = githubWebUrl(remoteUrl)
@@ -31,11 +31,17 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
   const [deleting, setDeleting] = useState<TagInfo | null>(null)
   const [alsoRemote, setAlsoRemote] = useState(false)
   const [releaseFor, setReleaseFor] = useState<string | null>(null)
+  const [target, setTarget] = useState<TagTarget | null>(null)
 
   const load = useCallback(async (): Promise<void> => {
     try {
       setTags(await window.api.tags(id))
       setError(null)
+      // Where a new tag would point. A failure here only hides the hint.
+      window.api
+        .tagTarget(id)
+        .then(setTarget)
+        .catch(() => setTarget(null))
     } catch (e) {
       setError((e as Error).message)
       setTags((t) => t ?? [])
@@ -101,8 +107,20 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
             <input type="checkbox" checked={push && hasRemote} disabled={!hasRemote} onChange={(e) => setPush(e.target.checked)} />
             <span>{t('tg.pushOnCreate')}</span>
           </label>
-          <span className="hint">{t('tg.at')}</span>
         </div>
+        {hasCommits && target?.hash && (
+          <p className="tag-target">
+            {tr('tg.target', { branch: target.branch ?? 'HEAD', hash: target.hash, subject: target.subject })}
+          </p>
+        )}
+        {hasCommits && target && target.onDefaultBranch === false && target.defaultBranch && (
+          <div className="banner-warn">
+            {tr('tg.warnBranch', { branch: target.branch ?? 'HEAD', default: target.defaultBranch })}
+          </div>
+        )}
+        {hasCommits && target && target.unpushed > 0 && (
+          <div className="banner-warn">{t('tg.warnUnpushed', { n: target.unpushed })}</div>
+        )}
         {!hasCommits && <p className="hint">{t('tg.needCommit')}</p>}
         {hasCommits && !hasRemote && <p className="hint">{t('tg.needRemote')}</p>}
       </div>

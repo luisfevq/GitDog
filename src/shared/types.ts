@@ -233,6 +233,21 @@ export interface CreatePullInput {
   draft: boolean
 }
 
+/** Where a new tag would point: the newest commit of the current branch. */
+export interface TagTarget {
+  branch: string | null
+  /** Short hash of the newest commit */
+  hash: string | null
+  subject: string
+  /** Main branch on GitHub, when known */
+  defaultBranch: string | null
+  /** null when the main branch is not known */
+  onDefaultBranch: boolean | null
+  /** Commits of this branch that GitHub does not have yet */
+  unpushed: number
+  hasRemote: boolean
+}
+
 export interface ReleaseInput {
   tag: string
   title: string
@@ -337,6 +352,9 @@ export interface Api {
   mergePull(id: string, number: number, method: MergeMethod, deleteBranch: boolean, email: string | null): Promise<string>
   mergeEmails(id: string): Promise<MergeEmails>
 
+  tagTarget(id: string): Promise<TagTarget>
+  /** Allows files dropped on the window to be attached to a release. Returns the ones that are regular files. */
+  addDroppedFiles(paths: string[]): Promise<string[]>
   /** File picker for release attachments. Only the paths it returns can be uploaded. */
   chooseFiles(defaultDir: string | null): Promise<string[]>
   /** Creates a release as a draft, uploads the files, and publishes it unless input.draft is set */
@@ -402,6 +420,8 @@ export const API_METHODS: (keyof Api)[] = [
   'reviewPull',
   'mergePull',
   'mergeEmails',
+  'tagTarget',
+  'addDroppedFiles',
   'chooseFiles',
   'createRelease',
   'openExternal',

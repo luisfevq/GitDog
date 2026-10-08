@@ -765,6 +765,7 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
           sha={tagFrom.hash.slice(0, 7)}
           subject={tagFrom.subject}
           hasRemote={status.hasRemote}
+          unpushed={tagFrom.unpushed}
           onClose={() => setTagFrom(null)}
           onConfirm={(name, message, push) => {
             const commit = tagFrom

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { API_METHODS } from '../shared/types'
 import type { Api, GitProgress } from '../shared/types'
 
@@ -25,4 +25,9 @@ contextBridge.exposeInMainWorld('events', {
     ipcRenderer.on('git:progress', handler)
     return () => ipcRenderer.removeListener('git:progress', handler)
   }
+})
+
+// Electron no longer gives a File its path. This is the supported way to get it, for files dropped on the window.
+contextBridge.exposeInMainWorld('files', {
+  pathFor: (file: File): string => webUtils.getPathForFile(file)
 })

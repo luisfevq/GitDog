@@ -2265,3 +2265,43 @@ select:focus {
 .field > .btn {
   align-self: flex-start;
 }
+
+/* ---------- Tag target, drop zone ---------- */
+
+.tag-target {
+  margin: 0;
+  color: var(--text-2);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.tag-target code {
+  color: var(--text);
+}
+
+.tag-form .banner-warn {
+  margin: 0;
+}
+
+.release-form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: -6px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: 12px;
+  background: rgba(10, 132, 255, 0.16);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}

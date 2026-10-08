@@ -1,7 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
 import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
-import { basename, join, resolve, sep } from 'path'
+import { basename, isAbsolute, join, resolve, sep } from 'path'
 import { githubRepoRef } from '../shared/github-url'
 import type { Account, Api, MergeEmail, MergeMethod, PrDraft, Project, ReviewEvent, Snapshot } from '../shared/types'
 import { API_METHODS } from '../shared/types'
@@ -522,6 +522,34 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
         limited = true
       }
       return { options, limited }
+    },
+
+    async tagTarget(id) {
+      const { project, auth } = context(id)
+      const status = await git.status(project.path)
+      let defaultBranch: string | null = null
+      if (status.hasRemote && githubRepoRef(project.remoteUrl)) {
+        const { owner, repo } = repoRef(project)
+        defaultBranch = await github.fetchDefaultBranch(auth.token, owner, repo).catch(() => null)
+      }
+      // Offline: assume main or master when the current branch is one of them.
+      if (!defaultBranch && (status.branch === 'main' || status.branch === 'master')) defaultBranch = status.branch
+      return {
+        branch: status.branch,
+        hash: status.headHash?.slice(0, 7) ?? null,
+        subject: status.lastCommit?.subject ?? '',
+        defaultBranch,
+        onDefaultBranch: defaultBranch ? status.branch === defaultBranch : null,
+        unpushed: status.hasRemote ? status.unpushed : 0,
+        hasRemote: status.hasRemote
+      }
+    },
+
+    async addDroppedFiles(paths) {
+      // A file dropped on the window is an explicit gesture of the user, like picking it in the dialog.
+      const accepted = paths.filter((p) => isAbsolute(p) && existsSync(p) && statSync(p).isFile())
+      accepted.forEach((p) => pickedFiles.add(p))
+      return accepted
     },
 
     async chooseFiles(defaultDir) {
