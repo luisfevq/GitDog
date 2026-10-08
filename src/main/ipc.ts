@@ -363,12 +363,13 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       return git.tags(project.path, auth)
     },
 
-    async createTag(id, name, message, push) {
+    async createTag(id, name, message, push, target) {
       const { project, auth } = context(id)
       checkTagName(name)
       const status = await git.status(project.path)
       if (!status.hasCommits) throw new Error(t('err.commitFirstTag'))
-      await git.createTag(project.path, name, message.trim(), auth)
+      if (target !== null && !hex.test(target)) throw new Error(t('err.badCommit'))
+      await git.createTag(project.path, name, message.trim(), auth, target)
       if (push) {
         try {
           await git.pushTag(project.path, name, auth)
@@ -376,6 +377,12 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
           throw new Error(t('err.tagNotPushed', { reason: (e as Error).message }))
         }
       }
+    },
+
+    async amendCommit(id, message, includeStaged) {
+      const { project, auth } = context(id)
+      if (!message.trim()) throw new Error(t('err.commitMessage'))
+      await git.amendLastCommit(project.path, message.trim(), includeStaged, auth)
     },
 
     async pushTag(id, name) {

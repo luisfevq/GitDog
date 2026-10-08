@@ -31,14 +31,9 @@
 
 ## Descargar e instalar (sin código)
 
-Ve a la sección **[Releases](../../releases/latest)** de este repositorio y descarga el instalador para tu Mac:
+Ve a la sección **[Releases](../../releases/latest)** de este repositorio y descarga `GitDog-<versión>-arm64.dmg`.
 
-| Tu Mac | Archivo |
-| --- | --- |
-| Apple Silicon (M1, M2, M3, M4…) | `GitDog-<versión>-arm64.dmg` |
-| Intel | `GitDog-<versión>-x64.dmg` |
-
-Para saber cuál tienes: menú  → **Acerca de este Mac**. Si dice "Chip: Apple…", es Apple Silicon. Si dice "Procesador: Intel…", es Intel.
+**Requisito:** un Mac con Apple Silicon (M1, M2, M3, M4…). Los instaladores nuevos ya no incluyen a los Mac con procesador Intel. Para comprobar tu Mac: menú  → **Acerca de este Mac**; debe decir "Chip: Apple…". Las versiones hasta la 1.1.0 todavía tienen el instalador `x64` para Intel. En un Mac Intel, GitDog no avisa de las versiones nuevas.
 
 1. Abre el `.dmg`.
 2. Arrastra **GitDog** a la carpeta **Aplicaciones**.
@@ -118,7 +113,7 @@ npm run dev
 npm run dist
 ```
 
-Crea dos archivos en `dist/`: `GitDog-<versión>-arm64.dmg` (Apple Silicon) y `GitDog-<versión>-x64.dmg` (Intel). Esta app se firma "ad hoc", sin certificado, así que cualquier persona puede generarla sin cuenta de Apple Developer. No está notarizada: macOS muestra un aviso la primera vez que se abre (mira [Solución de problemas](#solución-de-problemas)).
+Crea `dist/GitDog-<versión>-arm64.dmg`, solo para Apple Silicon. Esta app se firma "ad hoc", sin certificado, así que cualquier persona puede generarla sin cuenta de Apple Developer. No está notarizada: macOS muestra un aviso la primera vez que se abre (mira [Solución de problemas](#solución-de-problemas)).
 
 #### Instalador firmado y notarizado (el de Releases)
 
@@ -144,14 +139,14 @@ Los instaladores no se suben al código del repositorio (`dist/` está en `.giti
 
 1. Sube el número de `version` en `package.json`.
 2. `npm run dist:signed` (instalador firmado y notarizado)
-3. Crea el release y adjunta los dos `.dmg`. Con la CLI de GitHub:
+3. Crea el release y adjunta el `.dmg`. Con la CLI de GitHub:
 
    ```bash
-   gh release create v1.1.0 dist/GitDog-1.1.0-arm64.dmg dist/GitDog-1.1.0-x64.dmg \
+   gh release create v1.1.0 dist/GitDog-1.1.0-arm64.dmg \
      --title "GitDog 1.1.0" --generate-notes
    ```
 
-   También puedes hacerlo desde la web: **Releases** → **Draft a new release** → arrastra los dos archivos.
+   También puedes hacerlo desde la web: **Releases** → **Draft a new release** → arrastra el archivo.
 
 ### Cómo funciona
 

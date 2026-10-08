@@ -139,6 +139,10 @@ export const err = {
     es: 'No se puede deshacer un commit de merge ni el primer commit del proyecto.',
     en: 'A merge commit or the first commit of a project cannot be undone.'
   },
+  'err.amendPushed': {
+    es: 'Solo puedes modificar un commit que todavía no se subió.',
+    en: 'You can only amend a commit that has not been pushed yet.'
+  },
   'err.badPattern': { es: 'Patrón no válido.', en: 'Invalid pattern.' },
   'err.noFilesToDiscard': { es: 'No hay archivos que descartar.', en: 'There are no files to discard.' }
 } satisfies Record<string, Entry>

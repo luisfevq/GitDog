@@ -5,6 +5,7 @@ import { branches } from './locales/branches'
 import { prs } from './locales/prs'
 import { repo } from './locales/repo'
 import { repoview } from './locales/repoview'
+import { commits } from './locales/commits'
 import { common } from './locales/common'
 import { err } from './locales/err'
 
@@ -14,6 +15,7 @@ export const messages = {
   ...app,
   ...accounts,
   ...branches,
+  ...commits,
   ...prs,
   ...repo,
   ...repoview,

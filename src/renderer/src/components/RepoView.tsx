@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { githubWebUrl } from '@shared/github-url'
-import type { Account, BranchInfo, FileChange, Project, PullRequest, RepoStatus, Snapshot } from '@shared/types'
+import type { Account, BranchInfo, CommitInfo, FileChange, Project, PullRequest, RepoStatus, Snapshot } from '@shared/types'
 import { useI18n } from '../i18n'
 import { useGitProgress } from '../lib/useGitProgress'
 import { timeAgo } from '../lib/time'
 import { BranchMenu } from './BranchMenu'
 import { MergeBranchModal, NewBranchModal, SwitchBranchModal } from './BranchModals'
+import { AmendModal, BranchFromCommitModal, TagFromCommitModal } from './CommitModals'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { CreatePrModal } from './CreatePrModal'
 import { DiffView } from './DiffView'
@@ -67,6 +68,9 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
   const [merging, setMerging] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null)
   const [discarding, setDiscarding] = useState<FileChange[] | null>(null)
+  const [amending, setAmending] = useState<{ message: string } | null>(null)
+  const [branchFrom, setBranchFrom] = useState<CommitInfo | null>(null)
+  const [tagFrom, setTagFrom] = useState<CommitInfo | null>(null)
   const busyRef = useRef<string | null>(null)
   const syncing = busy === 'push' || busy === 'pull' || busy === 'fetch'
   const progress = useGitProgress(id, syncing)
@@ -298,6 +302,28 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
     run('ignore', async () => {
       await window.api.ignorePattern(id, pattern)
       return t('rp.ignored', { pattern })
+    })
+
+  /** The message of the commit as it was written: subject, a blank line, then the body. */
+  const openAmend = async (commit: CommitInfo): Promise<void> => {
+    try {
+      const detail = await window.api.commitDetail(id, commit.hash)
+      setAmending({ message: detail.body ? `${commit.subject}\n\n${detail.body}` : commit.subject })
+    } catch (e) {
+      toast((e as Error).message, 'error')
+    }
+  }
+
+  const amend = (message: string, includeStaged: boolean): Promise<void> =>
+    run('amend', async () => {
+      await window.api.amendCommit(id, message, includeStaged)
+      return t('cm.amended')
+    })
+
+  const tagCommit = (hash: string, name: string, message: string, push: boolean): Promise<void> =>
+    run('tag', async () => {
+      await window.api.createTag(id, name, message, push, hash)
+      return t('tg.created', { name })
     })
 
   const copy = (text: string): void => {
@@ -641,7 +667,12 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
         <HistoryView
           projectId={id}
           account={account}
-          refreshKey={`${status.branch}:${status.headHash}:${status.upstream}:${status.ahead}:${status.unpushed}`}
+          refreshKey={`${status.branch}:${status.headHash}:${status.upstream}:${status.ahead}:${status.unpushed}:${status.tagCount}`}
+          lastCommit={status.lastCommit}
+          onUndo={() => void undo()}
+          onAmend={(c) => void openAmend(c)}
+          onBranch={setBranchFrom}
+          onTag={setTagFrom}
         />
       )}
 
@@ -698,6 +729,47 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
             const target = switchTarget
             setSwitchTarget(null)
             void switchTo(target, leave)
+          }}
+        />
+      )}
+
+      {amending && (
+        <AmendModal
+          initialMessage={amending.message}
+          stagedCount={stagedCount}
+          onClose={() => setAmending(null)}
+          onConfirm={(message, includeStaged) => {
+            setAmending(null)
+            void amend(message, includeStaged)
+          }}
+        />
+      )}
+
+      {branchFrom && (
+        <BranchFromCommitModal
+          sha={branchFrom.hash.slice(0, 7)}
+          subject={branchFrom.subject}
+          current={status.branch ?? 'HEAD'}
+          dirty={dirty}
+          onClose={() => setBranchFrom(null)}
+          onConfirm={(name, leave) => {
+            const commit = branchFrom
+            setBranchFrom(null)
+            void createBranch(name, commit.hash, leave)
+          }}
+        />
+      )}
+
+      {tagFrom && (
+        <TagFromCommitModal
+          sha={tagFrom.hash.slice(0, 7)}
+          subject={tagFrom.subject}
+          hasRemote={status.hasRemote}
+          onClose={() => setTagFrom(null)}
+          onConfirm={(name, message, push) => {
+            const commit = tagFrom
+            setTagFrom(null)
+            void tagCommit(commit.hash, name, message, push)
           }}
         />
       )}

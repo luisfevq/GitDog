@@ -468,8 +468,15 @@ export async function tags(cwd: string, auth: Auth): Promise<TagInfo[]> {
     })
 }
 
-export async function createTag(cwd: string, name: string, message: string, identity: Auth): Promise<void> {
+export async function createTag(
+  cwd: string,
+  name: string,
+  message: string,
+  identity: Auth,
+  target?: string | null
+): Promise<void> {
   const args = message ? ['tag', '-a', name, '-m', message] : ['tag', name]
+  if (target) args.push(target)
   await git(cwd, args, { identity })
 }
 
@@ -521,7 +528,9 @@ export async function createBranchFrom(cwd: string, name: string, base: string |
     await git(cwd, ['checkout', '-b', name])
     return
   }
-  const start = (await refExists(cwd, `refs/heads/${base}`)) ? base : `origin/${base}`
+  // `base` is a branch name, or the hash of a commit (a new branch "from this commit").
+  const isCommit = /^[0-9a-f]{7,40}$/.test(base) && (await refExists(cwd, `${base}^{commit}`))
+  const start = isCommit || (await refExists(cwd, `refs/heads/${base}`)) ? base : `origin/${base}`
   await git(cwd, ['checkout', '-b', name, '--no-track', start])
 }
 
@@ -583,4 +592,24 @@ export async function undoLastCommit(cwd: string): Promise<string> {
   }
   await git(cwd, ['reset', '--soft', 'HEAD~1'])
   return (message ?? '').trim()
+}
+
+/** True when HEAD is not on the remote yet. Without a remote every commit counts as local. */
+async function headIsLocal(cwd: string): Promise<boolean> {
+  if (!(await remoteUrl(cwd))) return true
+  const pending = Number(
+    (await git(cwd, ['rev-list', '--count', 'HEAD', '--not', '--remotes=origin'], { okCodes: [0, 128] })).stdout.trim()
+  )
+  return pending > 0
+}
+
+/**
+ * Rewrites the last commit. With includeStaged the staged files join it. Without, only the message changes
+ * and the staged files stay staged.
+ */
+export async function amendLastCommit(cwd: string, message: string, includeStaged: boolean, identity: Auth): Promise<void> {
+  if (!(await headIsLocal(cwd))) throw new Error(t('err.amendPushed'))
+  const args = ['commit', '--amend', '-m', message]
+  if (!includeStaged) args.push('--only')
+  await git(cwd, args, { identity })
 }

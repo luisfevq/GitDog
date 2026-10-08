@@ -125,6 +125,17 @@ export interface UpdateInfo {
   name: string
 }
 
+export interface UpdateCheck {
+  /** Version of this app */
+  current: string
+  /** A newer release, or null */
+  update: UpdateInfo | null
+  /** GitHub could not be reached, so "no update" does not mean "up to date" */
+  failed: boolean
+  /** This Mac is not Apple Silicon, and new releases only run on Apple Silicon */
+  unsupported: boolean
+}
+
 export interface TagInfo {
   name: string
   hash: string
@@ -284,10 +295,13 @@ export interface Api {
   mergeBranch(id: string, branch: string): Promise<string>
   /** Open pull request whose head is this branch, or null */
   branchPull(id: string, branch: string): Promise<PullRequest | null>
-  checkUpdate(): Promise<UpdateInfo | null>
+  checkUpdate(): Promise<UpdateCheck>
 
   tags(id: string): Promise<TagInfo[]>
-  createTag(id: string, name: string, message: string, push: boolean): Promise<void>
+  /** target: commit to tag, or null for the current one */
+  createTag(id: string, name: string, message: string, push: boolean, target: string | null): Promise<void>
+  /** Changes the message of the last commit, if it was not pushed. includeStaged also adds the staged files. */
+  amendCommit(id: string, message: string, includeStaged: boolean): Promise<void>
   pushTag(id: string, name: string): Promise<void>
   deleteTag(id: string, name: string, alsoRemote: boolean): Promise<void>
 
@@ -350,6 +364,7 @@ export const API_METHODS: (keyof Api)[] = [
   'checkUpdate',
   'tags',
   'createTag',
+  'amendCommit',
   'pushTag',
   'deleteTag',
   'listPulls',

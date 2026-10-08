@@ -12,7 +12,7 @@ interface ChoiceProps {
 }
 
 /** What to do with local changes when the branch changes. */
-function ChangesChoice({ leave, setLeave, current, target }: ChoiceProps): JSX.Element {
+export function ChangesChoice({ leave, setLeave, current, target }: ChoiceProps): JSX.Element {
   const { t, tr } = useI18n()
   return (
     <div className="options">

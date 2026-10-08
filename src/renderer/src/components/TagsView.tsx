@@ -63,7 +63,7 @@ export function TagsView({ project, hasCommits, hasRemote, remoteUrl, onChanged 
   const create = async (): Promise<void> => {
     const tag = name.trim()
     if (!tag) return
-    const done = await run(() => window.api.createTag(id, tag, message, push && hasRemote), t('tg.created', { name: tag }))
+    const done = await run(() => window.api.createTag(id, tag, message, push && hasRemote, null), t('tg.created', { name: tag }))
     if (done) {
       setName('')
       setMessage('')

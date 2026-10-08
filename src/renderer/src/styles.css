@@ -2226,3 +2226,12 @@ select:focus {
 .seg.syncing:disabled {
   opacity: 1;
 }
+
+.update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  color: var(--text-2);
+}

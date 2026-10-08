@@ -8,11 +8,14 @@ interface Props {
   accounts: Account[]
   active: Account | null
   onSwitch: (login: string) => void
+  version: string | null
+  checking: boolean
+  onCheckUpdate: () => void
   onAdd: () => void
   onRemove: (login: string) => void
 }
 
-export function AccountMenu({ accounts, active, onSwitch, onAdd, onRemove }: Props): JSX.Element {
+export function AccountMenu({ accounts, active, version, checking, onCheckUpdate, onSwitch, onAdd, onRemove }: Props): JSX.Element {
   const { t, lang, setLang } = useI18n()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -91,6 +94,12 @@ export function AccountMenu({ accounts, active, onSwitch, onAdd, onRemove }: Pro
             <PlusIcon size={15} /> {t('acct.add')}
           </button>
           <div className="pop-sep" />
+          <div className="update-row">
+            <span>{version ? t('upd.version', { version }) : 'GitDog'}</span>
+            <button className="btn small" disabled={checking} onClick={onCheckUpdate}>
+              {checking ? t('upd.checking') : t('upd.check')}
+            </button>
+          </div>
           <div className="lang-row">
             <span>{t('common.language')}</span>
             <div className="segmented">

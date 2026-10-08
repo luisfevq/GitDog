@@ -48,22 +48,43 @@ function Workspace(): JSX.Element {
     return () => clearInterval(timer)
   }, [])
 
+  const [version, setVersion] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+
+  /** Looks for a newer release. A manual check also says what it found, and shows a closed notice again. */
+  const checkUpdates = useCallback(
+    async (manual: boolean): Promise<void> => {
+      if (manual) setChecking(true)
+      const result = await window.api.checkUpdate().catch(() => null)
+      if (manual) setChecking(false)
+      if (!result) {
+        if (manual) toast(t('upd.failed'), 'error')
+        return
+      }
+      setVersion(result.current)
+      setUpdate(result.update)
+      if (!manual) return
+      if (result.failed) toast(t('upd.failed'), 'error')
+      else if (result.unsupported) toast(t('upd.unsupported', { version: result.current }))
+      else if (result.update) {
+        setDismissal(null)
+        try {
+          localStorage.removeItem('gitdog.updateDismissed')
+        } catch {
+          /* nothing to clear */
+        }
+        toast(t('upd.found', { version: result.update.version }))
+      } else toast(t('upd.upToDate', { version: result.current }))
+    },
+    [t, toast]
+  )
+
   // Look for a new release when GitDog opens, and every 6 hours after that.
   useEffect(() => {
-    let alive = true
-    const check = (): void => {
-      window.api
-        .checkUpdate()
-        .then((found) => alive && setUpdate(found))
-        .catch(() => undefined)
-    }
-    check()
-    const timer = setInterval(check, UPDATE_REMINDER_MS)
-    return () => {
-      alive = false
-      clearInterval(timer)
-    }
-  }, [])
+    void checkUpdates(false)
+    const timer = setInterval(() => void checkUpdates(false), UPDATE_REMINDER_MS)
+    return () => clearInterval(timer)
+  }, [checkUpdates])
 
   const dismissUpdate = (version: string): void => {
     const value = { version, at: Date.now() }
@@ -156,6 +177,9 @@ function Workspace(): JSX.Element {
             accounts={current.accounts}
             active={account}
             onSwitch={switchAccount}
+            version={version}
+            checking={checking}
+            onCheckUpdate={() => void checkUpdates(true)}
             onAdd={() => setDialog({ kind: 'addAccount' })}
             onRemove={(login) => setDialog({ kind: 'removeAccount', login })}
           />
