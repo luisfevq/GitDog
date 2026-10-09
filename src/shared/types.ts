@@ -58,6 +58,8 @@ export interface RepoStatus {
   lastCommit: LastCommit | null
   /** ISO date of the last fetch or pull, from .git/FETCH_HEAD */
   lastFetch: string | null
+  /** A merge stopped on conflicts and is waiting to be finished or aborted */
+  mergeInProgress: boolean
   /** Stash ref (stash@{n}) of changes left on this branch with "leave my changes" */
   savedChanges: string | null
   files: FileChange[]
@@ -70,6 +72,29 @@ export interface LastCommit {
   date: string
   /** Not pushed, not a merge, and not the first commit of the project */
   canUndo: boolean
+}
+
+export interface ConflictFile {
+  path: string
+  /** No conflict markers left in the file */
+  resolved: boolean
+  /** both: edited on both sides. A deleted-* file has no markers: one side removed it. */
+  kind: 'both' | 'deleted-by-them' | 'deleted-by-us'
+}
+
+/** A merge that stopped on conflicts. */
+export interface MergeState {
+  /** Branch that is being merged in */
+  branch: string
+  /** Branch that receives it */
+  into: string
+  files: ConflictFile[]
+}
+
+export interface MergeBranchResult {
+  /** The merge stopped on conflicts and is still in progress */
+  conflicts: boolean
+  message: string
 }
 
 export interface PullResult {
@@ -326,7 +351,16 @@ export interface Api {
   commitDiff(id: string, hash: string, file: CommitFile): Promise<string>
   /** How many commits `branch` has that the current branch does not */
   mergePreview(id: string, branch: string): Promise<number>
-  mergeBranch(id: string, branch: string): Promise<string>
+  /** On conflicts the merge stays in progress: see mergeState, continueMerge and abortMerge */
+  mergeBranch(id: string, branch: string): Promise<MergeBranchResult>
+  /** The merge in progress and its conflicted files, or null when there is none */
+  mergeState(id: string): Promise<MergeState | null>
+  /** Stages the resolved files and commits the merge */
+  continueMerge(id: string): Promise<string>
+  abortMerge(id: string): Promise<void>
+  /** Opens a conflicted file in the editor (VS Code when installed, the default app otherwise) */
+  openInEditor(id: string, path: string): Promise<void>
+  openInTerminal(id: string): Promise<void>
   /** Open pull request whose head is this branch, or null */
   branchPull(id: string, branch: string): Promise<PullRequest | null>
   checkUpdate(): Promise<UpdateCheck>
@@ -402,6 +436,11 @@ export const API_METHODS: (keyof Api)[] = [
   'commitDiff',
   'mergePreview',
   'mergeBranch',
+  'mergeState',
+  'continueMerge',
+  'abortMerge',
+  'openInEditor',
+  'openInTerminal',
   'branchPull',
   'checkUpdate',
   'tags',

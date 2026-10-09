@@ -65,9 +65,11 @@ export const err = {
     es: 'Merge de {branch} en {current} completado ({n} {n?commit|commits}).',
     en: 'Merged {branch} into {current} ({n} {n?commit|commits}).'
   },
-  'err.mergeConflicts': {
-    es: 'Hay conflictos al hacer merge de {branch}{files}. El merge se canceló y tus archivos quedaron como estaban. Resuelve los conflictos con otra herramienta.',
-    en: 'There are conflicts merging {branch}{files}. The merge was cancelled and your files were left as they were. Resolve the conflicts with another tool.'
+  'msg.mergeContinued': { es: 'Merge completado.', en: 'Merge completed.' },
+  'err.noMerge': { es: 'No hay ningún merge en curso.', en: 'There is no merge in progress.' },
+  'err.mergeUnresolved': {
+    es: 'Aún hay conflictos sin resolver en: {files}.',
+    en: 'There are still unresolved conflicts in: {files}.'
   },
   'err.commitFirstTag': {
     es: 'Haz al menos un commit antes de crear un tag.',

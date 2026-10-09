@@ -7,6 +7,7 @@ import { timeAgo } from '../lib/time'
 import { BranchMenu } from './BranchMenu'
 import { MergeBranchModal, NewBranchModal, SwitchBranchModal } from './BranchModals'
 import { AmendModal, BranchFromCommitModal, TagFromCommitModal } from './CommitModals'
+import { ConflictsModal } from './ConflictsModal'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { CreatePrModal } from './CreatePrModal'
 import { DiffView } from './DiffView'
@@ -66,6 +67,8 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
   const [prCheck, setPrCheck] = useState(0)
   const [focus, setFocus] = useState<{ number: number; at: number } | null>(null)
   const [merging, setMerging] = useState(false)
+  // The window to resolve the conflicts of a merge that stopped
+  const [resolving, setResolving] = useState(false)
   const [menu, setMenu] = useState<{ x: number; y: number; file: FileChange } | null>(null)
   const [discarding, setDiscarding] = useState<FileChange[] | null>(null)
   const [amending, setAmending] = useState<{ message: string } | null>(null)
@@ -284,7 +287,16 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
       return t('rp.branchCreated', { name })
     })
 
-  const mergeInto = (from: string): Promise<void> => run('merge', async () => window.api.mergeBranch(id, from))
+  const mergeInto = (from: string): Promise<void> =>
+    run('merge', async () => {
+      const result = await window.api.mergeBranch(id, from)
+      // Conflicts: the merge stays open and the window to resolve them appears.
+      if (result.conflicts) {
+        setResolving(true)
+        return
+      }
+      return result.message
+    })
 
   const restore = (ref: string): Promise<void> =>
     run('restore', async () => {
@@ -536,6 +548,15 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
 
       {loadError && <div className="banner">{loadError}</div>}
 
+      {status.mergeInProgress && !resolving && (
+        <div className="banner-ok">
+          <span>{t('cf.banner')}</span>
+          <button className="btn small primary" onClick={() => setResolving(true)}>
+            {t('cf.view')}
+          </button>
+        </div>
+      )}
+
       {status.savedChanges && (
         <div className="banner-ok">
           <span>{tr('rp.savedChanges', { branch: status.branch ?? '' })}</span>
@@ -771,6 +792,17 @@ export function RepoView({ project, account, onState }: Props): JSX.Element {
             const commit = tagFrom
             setTagFrom(null)
             void tagCommit(commit.hash, name, message, push)
+          }}
+        />
+      )}
+
+      {resolving && (
+        <ConflictsModal
+          projectId={id}
+          onClose={() => setResolving(false)}
+          onDone={() => {
+            setResolving(false)
+            void refresh()
           }}
         />
       )}

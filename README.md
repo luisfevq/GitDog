@@ -21,7 +21,7 @@
 - **Commit rápido**: con un solo archivo marcado, el mensaje por defecto es `Update <archivo>` (o `Create`, `Delete`, `Rename`). Debajo del commit, **Deshacer** revierte el último commit si aún no se subió, y devuelve los cambios y el mensaje.
 - **Menú del archivo** (clic derecho): descartar cambios (se deja una copia en la Papelera), añadir a `.gitignore` (archivo, carpeta o extensión), copiar la ruta y mostrar en Finder.
 - **Historial**: lista de commits con autor, fecha y etiquetas, marca lo pendiente de subir y muestra los archivos y el diff de cada commit.
-- **Ramas**: lista con la fecha del último commit y buscador. Una rama nueva se publica con **Publicar rama**, y se puede hacer merge de otra rama en la actual.
+- **Ramas**: lista con la fecha del último commit y buscador. Una rama nueva se publica con **Publicar rama**, y se puede hacer merge de otra rama en la actual. Si el merge tiene conflictos, queda abierto y GitDog muestra una ventana con los archivos en conflicto: los abres en tu editor (VS Code si está instalado), los resuelves, y pulsas **Continuar merge** (o **Cancelar merge**).
 - **Cambios pendientes**: al cambiar de rama con cambios, pregunta si los dejas o los llevas. Al crear una rama, pregunta si sale de la actual o de `main`.
 - **Tags**: crear (simples o anotados), subir, eliminar.
 - **Releases**: crear un release de GitHub desde la pestaña Tags, con título, notas, archivos adjuntos (el `.dmg`, con el botón o arrastrándolo a la ventana) y barra de progreso. Antes de crear un tag o un release, GitDog muestra en qué commit y rama quedará, y avisa si no estás en la rama principal o si ese commit aún no está en GitHub. Se crea primero como borrador y solo se publica cuando los archivos ya están subidos.
@@ -143,13 +143,13 @@ Los instaladores no se suben al código del repositorio (`dist/` está en `.giti
 3. Crea el release y adjunta el `.dmg`. Con la CLI de GitHub:
 
    ```bash
-   gh release create v1.2.1 dist/GitDog-1.2.1-arm64.dmg \
-     --title "GitDog 1.2.1" --generate-notes
+   gh release create v1.2.2 dist/GitDog-1.2.2-arm64.dmg \
+     --title "GitDog 1.2.2" --generate-notes
    ```
 
    También puedes hacerlo desde la web: **Releases** → **Draft a new release** → arrastra el archivo.
 
-   O desde GitDog, con la cuenta del proyecto: pestaña **Tags** → **Crear release…** → escribe el tag (por ejemplo `v1.2.1`), añade el `.dmg` de `dist/` (o arrástralo a la ventana) y pulsa **Publicar release**. Si el tag solo existe en tu Mac, GitDog lo sube antes; si no existe, GitHub lo crea en el último commit de la rama principal.
+   O desde GitDog, con la cuenta del proyecto: pestaña **Tags** → **Crear release…** → escribe el tag (por ejemplo `v1.2.2`), añade el `.dmg` de `dist/` (o arrástralo a la ventana) y pulsa **Publicar release**. Si el tag solo existe en tu Mac, GitDog lo sube antes; si no existe, GitHub lo crea en el último commit de la rama principal.
 
 ### Cómo funciona
 

@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, ipcMain, shell } from 'electron'
+import { execFile } from 'child_process'
 import { existsSync, statSync } from 'fs'
 import { randomUUID } from 'crypto'
 import { basename, isAbsolute, join, resolve, sep } from 'path'
@@ -130,6 +131,8 @@ const hex = /^[0-9a-f]{7,40}$/
 
 /** Files the user picked for a release. Nothing else can be uploaded from the window. */
 const pickedFiles = new Set<string>()
+/** Files that were in conflict in each project, kept while a merge is open. An editor may stage them before we look. */
+const conflictFiles = new Map<string, string[]>()
 const MAX_ASSET_BYTES = 2 * 1024 * 1024 * 1024
 
 export function registerIpc(getWindow: () => BrowserWindow | null): void {
@@ -350,9 +353,54 @@ export function registerIpc(getWindow: () => BrowserWindow | null): void {
       const current = await git.status(project.path)
       if (current.branch === branch) throw new Error(t('err.mergeSelf'))
       const count = await git.mergePreview(project.path, branch)
-      if (count === 0) return t('msg.mergeUpToDate', { current: current.branch ?? '', branch })
-      await git.mergeBranch(project.path, branch, auth)
-      return t('msg.mergeBranchDone', { branch, current: current.branch ?? '', n: count })
+      if (count === 0) return { conflicts: false, message: t('msg.mergeUpToDate', { current: current.branch ?? '', branch }) }
+      const attempt = await git.mergeBranch(project.path, branch, auth)
+      if (attempt.conflicted) {
+        // The merge stays open. The window shows the conflicted files and waits for the user.
+        const state = await git.mergeState(project.path)
+        conflictFiles.set(id, state?.files.map((f) => f.path) ?? [])
+        return { conflicts: true, message: '' }
+      }
+      return { conflicts: false, message: t('msg.mergeBranchDone', { branch, current: current.branch ?? '', n: count }) }
+    },
+
+    async mergeState(id) {
+      const { project } = context(id)
+      const state = await git.mergeState(project.path, conflictFiles.get(id) ?? [])
+      if (!state) {
+        conflictFiles.delete(id)
+        return null
+      }
+      conflictFiles.set(id, state.files.map((f) => f.path))
+      return state
+    },
+
+    async continueMerge(id) {
+      const { project, auth } = context(id)
+      await git.continueMerge(project.path, conflictFiles.get(id) ?? [], auth)
+      conflictFiles.delete(id)
+      return t('msg.mergeContinued')
+    },
+
+    async abortMerge(id) {
+      const { project } = context(id)
+      await git.abortMerge(project.path)
+      conflictFiles.delete(id)
+    },
+
+    async openInEditor(id, path) {
+      const { project } = context(id)
+      const absolute = resolve(project.path, path)
+      // Only files of the project, and only files that are in the merge.
+      if (!absolute.startsWith(`${project.path}${sep}`) || !existsSync(absolute)) throw new Error(t('err.badPattern'))
+      const code = '/Applications/Visual Studio Code.app'
+      if (existsSync(code)) execFile('open', ['-a', code, absolute])
+      else await shell.openPath(absolute)
+    },
+
+    async openInTerminal(id) {
+      const { project } = context(id)
+      execFile('open', ['-a', 'Terminal', project.path])
     },
 
     async branchPull(id, branch) {

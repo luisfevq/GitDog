@@ -8,7 +8,9 @@ import type {
   CommitInfo,
   FileChange,
   GitProgress,
+  ConflictFile,
   LastCommit,
+  MergeState,
   PullResult,
   RepoStatus,
   TagInfo
@@ -193,12 +195,13 @@ function fetchedAt(cwd: string): string | null {
 }
 
 export async function status(cwd: string): Promise<RepoStatus> {
-  const [{ stdout }, head, remote, tagList, lastLog] = await Promise.all([
+  const [{ stdout }, head, remote, tagList, lastLog, merging] = await Promise.all([
     git(cwd, ['status', '--porcelain=v1', '-z', '-b', '--untracked-files=all']),
     git(cwd, ['rev-parse', '-q', '--verify', 'HEAD'], { okCodes: [0, 1, 128] }),
     git(cwd, ['config', '--get', 'remote.origin.url'], { okCodes: [0, 1] }),
     git(cwd, ['tag', '--list']),
-    git(cwd, ['log', '-1', '--format=%H%x1f%s%x1f%aI%x1f%P'], { okCodes: [0, 128] })
+    git(cwd, ['log', '-1', '--format=%H%x1f%s%x1f%aI%x1f%P'], { okCodes: [0, 128] }),
+    mergeInProgress(cwd)
   ])
 
   const parts = stdout.split('\0')
@@ -243,6 +246,7 @@ export async function status(cwd: string): Promise<RepoStatus> {
     unpushed: Number(unpushed.stdout.trim()) || 0,
     lastCommit: parseLastCommit(lastLog.stdout, hasRemote, Number(unpushed.stdout.trim()) || 0),
     lastFetch: fetchedAt(cwd),
+    mergeInProgress: merging,
     savedChanges,
     tagCount: tagList.stdout.split('\n').filter(Boolean).length,
     files
@@ -381,26 +385,98 @@ export async function mergePreview(cwd: string, branch: string): Promise<number>
   return Number(stdout.trim()) || 0
 }
 
-/** Merges a local branch into the current one. On conflicts the merge is cancelled and the files are listed. */
-export async function mergeBranch(cwd: string, branch: string, identity: Auth): Promise<string> {
+export interface MergeAttempt {
+  /** The merge stopped on conflicts and is still in progress */
+  conflicted: boolean
+  output: string
+}
+
+/** True while a merge waits for its conflicts to be resolved. */
+export async function mergeInProgress(cwd: string): Promise<boolean> {
+  return (await git(cwd, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { okCodes: [0, 1, 128] })).code === 0
+}
+
+/** Merges a local branch into the current one. On conflicts the merge stays in progress, for the user to resolve. */
+export async function mergeBranch(cwd: string, branch: string, identity: Auth): Promise<MergeAttempt> {
   try {
     const { stdout } = await git(cwd, ['merge', '--no-edit', branch], { identity })
-    return stdout.trim()
+    return { conflicted: false, output: stdout.trim() }
   } catch (error) {
-    const merging = (await git(cwd, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], { okCodes: [0, 1, 128] })).code === 0
-    if (!merging) throw error
-    const conflicted = (await git(cwd, ['diff', '--name-only', '--diff-filter=U'], { okCodes: [0, 128] })).stdout
-      .split('\n')
-      .filter(Boolean)
-    await git(cwd, ['merge', '--abort'], { okCodes: [0, 128] })
-    const shown = conflicted.slice(0, 5).join(', ')
-    throw new Error(
-      t('err.mergeConflicts', {
-        branch,
-        files: shown ? ` (${shown}${conflicted.length > 5 ? ', …' : ''})` : ''
-      })
-    )
+    if (await mergeInProgress(cwd)) return { conflicted: true, output: '' }
+    throw error
   }
+}
+
+/** Git writes <<<<<<< and >>>>>>> lines around each conflict. A markdown "=======" line alone is not a conflict. */
+function hasConflictMarkers(path: string): boolean {
+  try {
+    if (statSync(path).size > 5 * 1024 * 1024) return false
+    const text = readFileSync(path, 'utf8')
+    return /^<{7}( |$)/m.test(text) && /^>{7}( |$)/m.test(text)
+  } catch {
+    return false // the file is gone: the user chose to delete it
+  }
+}
+
+/**
+ * The merge in progress and its files. `known` are files that were in conflict before and may have been staged
+ * since (an editor can stage them), so they would no longer show as unmerged.
+ */
+export async function mergeState(cwd: string, known: string[] = []): Promise<MergeState | null> {
+  if (!(await mergeInProgress(cwd))) return null
+  const unmerged = (await git(cwd, ['diff', '--name-only', '--diff-filter=U'], { okCodes: [0, 128] })).stdout
+    .split('\n')
+    .filter(Boolean)
+  const paths = [...new Set([...known, ...unmerged])]
+
+  // Index stages: 1 = common ancestor, 2 = our side, 3 = their side. A missing side means that side deleted the file.
+  const stages = new Map<string, Set<number>>()
+  for (const line of (await git(cwd, ['ls-files', '-u'], { okCodes: [0, 128] })).stdout.split('\n').filter(Boolean)) {
+    const match = line.match(/^\d+ [0-9a-f]+ (\d)\t(.+)$/)
+    if (match) stages.set(match[2], (stages.get(match[2]) ?? new Set()).add(Number(match[1])))
+  }
+  const kindOf = (path: string): ConflictFile['kind'] => {
+    const has = stages.get(path)
+    if (!has) return 'both'
+    if (has.has(2) && !has.has(3)) return 'deleted-by-them'
+    if (has.has(3) && !has.has(2)) return 'deleted-by-us'
+    return 'both'
+  }
+
+  let branch = ''
+  try {
+    const first = readFileSync(join(cwd, '.git', 'MERGE_MSG'), 'utf8').split('\n')[0]
+    branch = first.match(/Merge (?:remote-tracking )?branch '(.+?)'/)?.[1] ?? ''
+  } catch {
+    /* no merge message */
+  }
+  const into = (await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], { okCodes: [0, 128] })).stdout.trim()
+
+  return {
+    branch,
+    into,
+    files: paths.map((path) => ({
+      path,
+      resolved: !unmerged.includes(path) || !hasConflictMarkers(join(cwd, path)),
+      kind: kindOf(path)
+    }))
+  }
+}
+
+/** Stages the files the user resolved and commits the merge. */
+export async function continueMerge(cwd: string, known: string[], identity: Auth): Promise<void> {
+  const state = await mergeState(cwd, known)
+  if (!state) throw new Error(t('err.noMerge'))
+  const pending = state.files.filter((f) => !f.resolved).map((f) => f.path)
+  if (pending.length > 0) {
+    throw new Error(t('err.mergeUnresolved', { files: `${pending.slice(0, 5).join(', ')}${pending.length > 5 ? ', …' : ''}` }))
+  }
+  if (state.files.length > 0) await git(cwd, ['add', '-A', '--', ...state.files.map((f) => f.path)])
+  await git(cwd, ['commit', '--no-edit'], { identity })
+}
+
+export async function abortMerge(cwd: string): Promise<void> {
+  await git(cwd, ['merge', '--abort'])
 }
 
 /** True only when `path` is the root of a repo, not a folder inside one. */

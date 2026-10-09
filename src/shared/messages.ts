@@ -8,6 +8,7 @@ import { repo } from './locales/repo'
 import { repoview } from './locales/repoview'
 import { commits } from './locales/commits'
 import { common } from './locales/common'
+import { conflicts } from './locales/conflicts'
 import { err } from './locales/err'
 
 /** Every message of the app. Each area lives in its own file under locales/. */
@@ -17,6 +18,7 @@ export const messages = {
   ...accounts,
   ...branches,
   ...commits,
+  ...conflicts,
   ...prs,
   ...release,
   ...repo,

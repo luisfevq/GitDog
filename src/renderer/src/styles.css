@@ -2305,3 +2305,90 @@ select:focus {
   pointer-events: none;
   backdrop-filter: blur(2px);
 }
+
+/* ---------- Merge conflicts dialog ---------- */
+
+.banner-success {
+  padding: 10px 14px;
+  background: rgba(48, 209, 88, 0.16);
+  border: 1px solid rgba(48, 209, 88, 0.4);
+  border-radius: 8px;
+  color: #8ff0a8;
+  line-height: 1.4;
+}
+
+.conflict-count {
+  margin: 4px 0 0;
+  font-size: 15px;
+}
+
+.conflict-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.conflict-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.conflict-row:last-child {
+  border-bottom: 0;
+}
+
+.conflict-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.conflict-ok {
+  color: var(--green);
+  font-size: 12px;
+}
+
+.conflict-bad {
+  color: var(--orange);
+  font-size: 12px;
+}
+
+.conflict-note {
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.conflict-state {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.conflict-state.ok {
+  background: rgba(48, 209, 88, 0.25);
+  color: var(--green);
+}
+
+.conflict-state.bad {
+  background: rgba(255, 159, 10, 0.25);
+  color: var(--orange);
+}
+
+.hint .text-link {
+  display: inline;
+  padding: 0;
+}
