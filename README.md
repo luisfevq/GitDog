@@ -143,13 +143,13 @@ Los instaladores no se suben al código del repositorio (`dist/` está en `.giti
 3. Crea el release y adjunta el `.dmg`. Con la CLI de GitHub:
 
    ```bash
-   gh release create v1.2.2 dist/GitDog-1.2.2-arm64.dmg \
-     --title "GitDog 1.2.2" --generate-notes
+   gh release create v1.2.3 dist/GitDog-1.2.3-arm64.dmg \
+     --title "GitDog 1.2.3" --generate-notes
    ```
 
    También puedes hacerlo desde la web: **Releases** → **Draft a new release** → arrastra el archivo.
 
-   O desde GitDog, con la cuenta del proyecto: pestaña **Tags** → **Crear release…** → escribe el tag (por ejemplo `v1.2.2`), añade el `.dmg` de `dist/` (o arrástralo a la ventana) y pulsa **Publicar release**. Si el tag solo existe en tu Mac, GitDog lo sube antes; si no existe, GitHub lo crea en el último commit de la rama principal.
+   O desde GitDog, con la cuenta del proyecto: pestaña **Tags** → **Crear release…** → escribe el tag (por ejemplo `v1.2.3`), añade el `.dmg` de `dist/` (o arrástralo a la ventana) y pulsa **Publicar release**. Si el tag solo existe en tu Mac, GitDog lo sube antes; si no existe, GitHub lo crea en el último commit de la rama principal.
 
 ### Cómo funciona
 

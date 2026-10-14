@@ -3,7 +3,7 @@
 Documento interno. Explica qué hace GitDog, cómo está hecho, qué decisiones se tomaron y qué falta.
 El `README.md` es para usuarios. Este archivo es para quien continúe el trabajo, sea una persona o una sesión nueva de Claude.
 
-Última actualización: 2026-10-10 · Versión local: **1.2.2** · Última versión publicada: **1.2.2**
+Última actualización: 2026-10-14 · Versión local: **1.2.3** · Última versión publicada: **1.2.2**
 
 > Este repositorio es público. No escribas aquí tokens, contraseñas, Apple ID, Team ID, correos privados ni nombres de cuentas de trabajo.
 
@@ -44,7 +44,7 @@ Un cliente Git de escritorio para macOS, parecido a GitHub Desktop, con **varias
 | Dato | Valor |
 | --- | --- |
 | Rama de trabajo | `main` (el flujo normal usa ramas y PRs) |
-| Versión en `package.json` | 1.2.2 |
+| Versión en `package.json` | 1.2.3 |
 | Último release publicado | `v1.2.2` (solo `arm64`) |
 | Tag `v1.2.2` | Apunta al último commit de `main` |
 | Cambios sin commit | Ninguno al momento de escribir esto, salvo este archivo |
@@ -364,6 +364,7 @@ Todo esto se probó con repos temporales y con la interfaz simulada, pero **no**
 | `1.2.0` | Menú del historial (modificar, deshacer, rama, tag, SHA). Buscar actualizaciones. Aviso más fiable. Crear releases desde GitDog. Solo Apple Silicon |
 | `1.2.1` | Destino del tag y avisos. Arrastrar archivos al release. Título del release como sugerencia. Hash correcto en tags anotados |
 | `1.2.2` | Modal de conflictos de merge (continuar o cancelar) |
+| `1.2.3` | Los nombres de tag aceptan `+` (por ejemplo `v1.0.0+1`) |
 
 ## 14. Preferencias del autor
 
