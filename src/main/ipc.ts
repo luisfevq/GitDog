@@ -83,7 +83,7 @@ function repoRef(project: Project): { owner: string; repo: string } {
 }
 
 function checkTagName(name: string): void {
-  if (!/^[A-Za-z0-9_][A-Za-z0-9_./-]*$/.test(name) || name.includes('..') || name.endsWith('/') || name.endsWith('.lock')) {
+  if (!/^[A-Za-z0-9_][A-Za-z0-9_./+-]*$/.test(name) || name.includes('..') || name.endsWith('/') || name.endsWith('.lock')) {
     throw new Error(t('err.tagName'))
   }
 }

@@ -29,8 +29,8 @@ export const err = {
     en: 'This project has no GitHub remote. Publish it first.'
   },
   'err.tagName': {
-    es: 'Nombre de tag no válido. Usa letras, números, punto, guion o barra. Ejemplo: v1.0.0',
-    en: 'Invalid tag name. Use letters, numbers, dot, dash or slash. Example: v1.0.0'
+    es: 'Nombre de tag no válido. Usa letras, números, punto, guion, barra o +. Ejemplo: v1.0.0',
+    en: 'Invalid tag name. Use letters, numbers, dot, dash, slash or +. Example: v1.0.0'
   },
   'err.prNumber': { es: 'Número de pull request no válido.', en: 'Invalid pull request number.' },
   'err.connectFirst': { es: 'Primero conecta una cuenta de GitHub.', en: 'Connect a GitHub account first.' },
